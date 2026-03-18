@@ -1,0 +1,145 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isCliente() {
+      return isAuthenticated() && getUserRole() == 'cliente';
+    }
+
+    function isTecnico() {
+      return isAuthenticated() && getUserRole() == 'tecnico';
+    }
+
+    // ===== USERS COLLECTION =====
+    match /users/{userId} {
+      // Lectura: propio perfil, admin, o clientes pueden ver perfiles de técnicos (para modelo híbrido)
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        // Clientes pueden leer perfiles de técnicos para selección híbrida
+        (isCliente() && resource.data.rol == 'tecnico' && resource.data.activo == true)
+      );
+
+      // Listar técnicos: clientes pueden buscar técnicos disponibles
+      allow list: if isAuthenticated() && (
+        isAdmin() ||
+        isCliente()
+      );
+
+      allow create: if isAuthenticated();
+
+      // Actualización: propio perfil o admin
+      // No se permite cambiar el rol
+      // Técnicos pueden actualizar sus campos de perfil (disponibilidad, tarifas, etc.)
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId || isAdmin()
+      ) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rol']);
+
+      allow delete: if isAdmin();
+    }
+
+    // ===== SERVICIOS COLLECTION =====
+    match /servicios/{servicioId} {
+      // Lectura: admin, cliente dueño, técnico asignado
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        (isCliente() && resource.data.clienteId == request.auth.uid) ||
+        (isTecnico() && resource.data.get('tecnicoId', null) == request.auth.uid)
+      );
+
+      // Creación: clientes o admin
+      // Cliente puede seleccionar técnico al crear (tipoAsignacion = "cliente")
+      // o dejar sin técnico para asignación automática/admin
+      allow create: if isAuthenticated() && (isCliente() || isAdmin()) &&
+                      request.resource.data.estado == 'pendiente' &&
+                      request.resource.data.tipoAsignacion in ['cliente', 'automatica', 'admin'];
+
+      // Actualización:
+      // - Admin puede todo
+      // - Cliente puede actualizar sus servicios pendientes (incluyendo seleccionar técnico)
+      // - Técnico solo puede actualizar estado de servicios asignados
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isCliente() &&
+         resource.data.clienteId == request.auth.uid &&
+         resource.data.estado == 'pendiente') ||
+        (isTecnico() &&
+         resource.data.get('tecnicoId', null) == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']))
+      );
+
+      allow delete: if isAdmin();
+
+      // Subcollection: mensajes
+      match /mensajes/{mensajeId} {
+        allow read: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
+        );
+
+        allow create: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
+        ) && request.resource.data.userId == request.auth.uid;
+
+        allow update: if isAuthenticated() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leido']);
+      }
+    }
+
+    // ===== RESENAS COLLECTION (NEW - Hybrid Model) =====
+    match /resenas/{resenaId} {
+      // Lectura: cualquier usuario autenticado puede ver reseñas (para elegir técnico)
+      allow read: if isAuthenticated();
+
+      // Creación: solo el cliente del servicio completado
+      allow create: if isAuthenticated() &&
+                      isCliente() &&
+                      request.resource.data.clienteId == request.auth.uid &&
+                      request.resource.data.keys().hasAll(['servicioId', 'clienteId', 'tecnicoId', 'calificacion']) &&
+                      request.resource.data.calificacion >= 1 &&
+                      request.resource.data.calificacion <= 5;
+
+      // Actualización: solo el cliente que la creó (para editar comentario)
+      allow update: if isAuthenticated() &&
+                      resource.data.clienteId == request.auth.uid &&
+                      !request.resource.data.diff(resource.data).affectedKeys().hasAny(['servicioId', 'clienteId', 'tecnicoId']);
+
+      // Eliminación: solo admin
+      allow delete: if isAdmin();
+    }
+
+    // ===== CONFIGURACION COLLECTION =====
+    match /configuracion/{doc} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // ===== TRANSACCIONES COLLECTION =====
+    match /transacciones/{transaccionId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.clienteId == request.auth.uid ||
+        resource.data.tecnicoId == request.auth.uid
+      );
+      allow create: if false; // Only via Cloud Functions
+      allow update: if false; // Only via Cloud Functions
+      allow delete: if isAdmin();
+    }
+  }
+}

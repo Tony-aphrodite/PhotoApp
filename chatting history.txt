@@ -1,0 +1,890 @@
+Proposal
+USD 2,000.00
+Bid amount: USD 2,000.00
+
+
+Description
+
+Hola Edgar,
+
+La decisión de construir el MVP con FlutterFlow y Firebase es acertada para validar rápido, pero el riesgo real está en cómo se estructura Firestore desde el día uno, porque un modelo de datos mal diseñado en esta fase se convierte en deuda técnica que obliga a reescribir toda la base cuando la app necesite escalar en la Fase 2, y eso cuesta más que haberlo hecho bien desde el inicio.
+
+En los últimos tres años trabajé en dos proyectos con un alcance prácticamente idéntico. El primero fue un MVP de servicios de limpieza a domicilio donde construí la app completa en FlutterFlow con Firebase como backend, incluyendo registro dual para clientes y prestadores, solicitudes de servicio con carga de fotos, geolocalización con Google Maps para mostrar la ubicación del cliente al prestador, y un panel de administración para gestionar todas las solicitudes en tiempo real. Ese MVP se lanzó en 4 semanas y el cliente lo usó para validar su modelo de negocio con 200 usuarios reales antes de invertir en una versión más robusta. El segundo fue una app de mantenimiento técnico para edificios residenciales, también con FlutterFlow y Firebase, donde implementé un sistema de estimación de costos basado en reglas configurables según tipo de servicio, urgencia y zona geográfica, además de integración con WhatsApp Business para que el técnico y el cliente pudieran comunicarse directamente con un solo toque. Lo que aprendí en ambos proyectos es que el éxito de un MVP de servicios a domicilio no depende de cuántas funcionalidades tiene, sino de que el flujo desde que el cliente crea la solicitud hasta que el técnico la recibe sea tan simple que no requiera explicación.
+
+Para la estructura de Firestore, diseñaría colecciones separadas para usuarios con un campo de rol que distingue entre cliente, técnico y administrador, solicitudes de servicio con documentos que almacenan la descripción, fotos en Firebase Storage con referencia en el documento, coordenadas de geolocalización, estado del servicio y timestamp, y una subcolección de estimaciones vinculada a cada solicitud. Esta estructura permite hacer queries eficientes por estado, por técnico asignado y por proximidad geográfica usando GeoHash, que es la estrategia recomendada para búsquedas por ubicación en Firestore ya que no soporta índices geoespaciales nativos como MongoDB. Las reglas de seguridad de Firestore las configuraría para que cada cliente solo pueda ver sus propias solicitudes, cada técnico solo las que tiene asignadas, y el administrador tenga acceso completo, evitando así que un usuario pueda leer datos de otro desde el primer día.
+
+El sistema de estimación de costos basado en reglas simples lo implementaría con una colección de configuración en Firestore donde el administrador pueda definir tarifas base por categoría de servicio, multiplicadores por urgencia y recargos por distancia o horario. FlutterFlow permite crear la lógica condicional directamente en el flujo visual sin necesidad de Cloud Functions para reglas simples, lo que mantiene el MVP ligero y fácil de modificar sin tocar código. Si en el futuro las reglas se vuelven más complejas, la migración a Cloud Functions sería directa porque los datos ya estarían estructurados correctamente.
+
+Para la integración de Google Maps, usaría el widget nativo de FlutterFlow que ya soporta Google Maps API, capturando las coordenadas del cliente al momento de crear la solicitud con opción de ajustar manualmente el pin si la detección automática no es precisa. En el lado del técnico y del administrador, esas coordenadas se mostrarían en un mapa con la dirección formateada usando Geocoding inverso, para que puedan visualizar dónde está el servicio sin necesidad de copiar direcciones a otra app.
+
+El botón de contacto lo implementaría con doble opción: un enlace directo a WhatsApp con mensaje prellenado que incluya el número de solicitud para que la conversación tenga contexto desde el primer mensaje, y paralelamente un chat simple dentro de la app usando Firestore como backend de mensajería en tiempo real con listeners de snapshot. Esto le da al cliente la flexibilidad de elegir cómo comunicarse sin forzarlo a salir de la app si no quiere.
+
+Respecto al entregable, el proyecto se entregaría con acceso completo al proyecto de FlutterFlow transferido a su cuenta, el proyecto de Firebase con todas las colecciones, reglas de seguridad e índices documentados, y un documento breve que explique la estructura de datos y las decisiones técnicas tomadas, para que cualquier desarrollador pueda continuar el trabajo en la Fase 2 sin depender de mí.
+
+Antes de definir el cronograma y presupuesto exacto, necesito clarificar tres puntos:
+
+Primero, cuando mencionas registro para clientes y técnicos, ¿los técnicos se registran de forma autónoma en la app o son dados de alta exclusivamente por el administrador desde el panel? Esto cambia significativamente el flujo de onboarding y las validaciones necesarias, porque si los técnicos se autorregistran necesitaríamos un proceso de verificación o aprobación antes de que puedan recibir solicitudes.
+
+Segundo, la asignación de técnicos a las solicitudes, ¿será manual desde el panel de administración o esperan que el MVP ya incluya alguna lógica automática de asignación basada en proximidad o disponibilidad? Para un MVP recomendaría asignación manual con notificación push al técnico seleccionado, pero quiero confirmar su expectativa.
+
+Tercero, ¿la app debe publicarse en Google Play y App Store como parte de esta Fase 1, o el entregable es la app funcional lista para publicación y ustedes gestionan las cuentas de desarrollador y el proceso de subida? Esto es importante porque el proceso de revisión de Apple puede agregar entre 3 y 10 días al cronograma y requiere una cuenta de Apple Developer activa de su parte.
+
+Quedo atento a sus respuestas para enviarle un cronograma detallado por semanas.
+
+Gracias. JunJun Mabod
+
+2 weeks ago 
+Gracias por tu explicación detallada. Valoro mucho el enfoque que planteas respecto a la estructura de Firestore y la prevención de deuda técnica desde el día uno.
+
+Estoy evaluando otra propuesta que contempla el MVP por USD 1,000 con funcionalidades similares (panel admin, estimación por reglas, estados, mapas y WhatsApp deep link). La diferencia principal está en la profundidad de la arquitectura y preparación para escalabilidad.
+
+Mi prioridad no es solo lanzar rápido, sino evitar reestructuraciones costosas en Fase 2.
+
+Si decidimos trabajar contigo, necesitaría:
+    1.    Cronograma claro por semanas.
+    2.    Entregables parciales verificables (por ejemplo: autenticación + estructura Firestore semana 1).
+    3.    Definición clara de arquitectura final antes de comenzar.
+    4.    Esquema de pagos dividido por hitos.
+    5.    Confirmación de que las reglas de seguridad y roles estarán correctamente blindadas desde el inicio.
+
+Dado que estamos en etapa MVP y control de inversión es clave, ¿estarías dispuesto a ajustar el presupuesto a un rango de USD 1,500 – 1,600 si cerramos esta semana?
+
+Quedo atento.
+
+2 weeks ago
+Hola Edgar,
+
+2 weeks ago 
+Proposal
+USD 1,600.00
+Bid amount: USD 1,600.00
+
+
+Description
+
+Hola Edgar,
+
+La decisión de construir el MVP con FlutterFlow y Firebase es acertada para validar rápido, pero el riesgo real está en cómo se estructura Firestore desde el día uno, porque un modelo de datos mal diseñado en esta fase se convierte en deuda técnica que obliga a reescribir toda la base cuando la app necesite escalar en la Fase 2, y eso cuesta más que haberlo hecho bien desde el inicio.
+
+En los últimos tres años trabajé en dos proyectos con un alcance prácticamente idéntico. El primero fue un MVP de servicios de limpieza a domicilio donde construí la app completa en FlutterFlow con Firebase como backend, incluyendo registro dual para clientes y prestadores, solicitudes de servicio con carga de fotos, geolocalización con Google Maps para mostrar la ubicación del cliente al prestador, y un panel de administración para gestionar todas las solicitudes en tiempo real. Ese MVP se lanzó en 4 semanas y el cliente lo usó para validar su modelo de negocio con 200 usuarios reales antes de invertir en una versión más robusta. El segundo fue una app de mantenimiento técnico para edificios residenciales, también con FlutterFlow y Firebase, donde implementé un sistema de estimación de costos basado en reglas configurables según tipo de servicio, urgencia y zona geográfica, además de integración con WhatsApp Business para que el técnico y el cliente pudieran comunicarse directamente con un solo toque. Lo que aprendí en ambos proyectos es que el éxito de un MVP de servicios a domicilio no depende de cuántas funcionalidades tiene, sino de que el flujo desde que el cliente crea la solicitud hasta que el técnico la recibe sea tan simple que no requiera explicación.
+
+Para la estructura de Firestore, diseñaría colecciones separadas para usuarios con un campo de rol que distingue entre cliente, técnico y administrador, solicitudes de servicio con documentos que almacenan la descripción, fotos en Firebase Storage con referencia en el documento, coordenadas de geolocalización, estado del servicio y timestamp, y una subcolección de estimaciones vinculada a cada solicitud. Esta estructura permite hacer queries eficientes por estado, por técnico asignado y por proximidad geográfica usando GeoHash, que es la estrategia recomendada para búsquedas por ubicación en Firestore ya que no soporta índices geoespaciales nativos como MongoDB. Las reglas de seguridad de Firestore las configuraría para que cada cliente solo pueda ver sus propias solicitudes, cada técnico solo las que tiene asignadas, y el administrador tenga acceso completo, evitando así que un usuario pueda leer datos de otro desde el primer día.
+
+El sistema de estimación de costos basado en reglas simples lo implementaría con una colección de configuración en Firestore donde el administrador pueda definir tarifas base por categoría de servicio, multiplicadores por urgencia y recargos por distancia o horario. FlutterFlow permite crear la lógica condicional directamente en el flujo visual sin necesidad de Cloud Functions para reglas simples, lo que mantiene el MVP ligero y fácil de modificar sin tocar código. Si en el futuro las reglas se vuelven más complejas, la migración a Cloud Functions sería directa porque los datos ya estarían estructurados correctamente.
+
+Para la integración de Google Maps, usaría el widget nativo de FlutterFlow que ya soporta Google Maps API, capturando las coordenadas del cliente al momento de crear la solicitud con opción de ajustar manualmente el pin si la detección automática no es precisa. En el lado del técnico y del administrador, esas coordenadas se mostrarían en un mapa con la dirección formateada usando Geocoding inverso, para que puedan visualizar dónde está el servicio sin necesidad de copiar direcciones a otra app.
+
+El botón de contacto lo implementaría con doble opción: un enlace directo a WhatsApp con mensaje prellenado que incluya el número de solicitud para que la conversación tenga contexto desde el primer mensaje, y paralelamente un chat simple dentro de la app usando Firestore como backend de mensajería en tiempo real con listeners de snapshot. Esto le da al cliente la flexibilidad de elegir cómo comunicarse sin forzarlo a salir de la app si no quiere.
+
+Respecto al entregable, el proyecto se entregaría con acceso completo al proyecto de FlutterFlow transferido a su cuenta, el proyecto de Firebase con todas las colecciones, reglas de seguridad e índices documentados, y un documento breve que explique la estructura de datos y las decisiones técnicas tomadas, para que cualquier desarrollador pueda continuar el trabajo en la Fase 2 sin depender de mí.
+
+Antes de definir el cronograma y presupuesto exacto, necesito clarificar tres puntos:
+
+Primero, cuando mencionas registro para clientes y técnicos, ¿los técnicos se registran de forma autónoma en la app o son dados de alta exclusivamente por el administrador desde el panel? Esto cambia significativamente el flujo de onboarding y las validaciones necesarias, porque si los técnicos se autorregistran necesitaríamos un proceso de verificación o aprobación antes de que puedan recibir solicitudes.
+
+Segundo, la asignación de técnicos a las solicitudes, ¿será manual desde el panel de administración o esperan que el MVP ya incluya alguna lógica automática de asignación basada en proximidad o disponibilidad? Para un MVP recomendaría asignación manual con notificación push al técnico seleccionado, pero quiero confirmar su expectativa.
+
+Tercero, ¿la app debe publicarse en Google Play y App Store como parte de esta Fase 1, o el entregable es la app funcional lista para publicación y ustedes gestionan las cuentas de desarrollador y el proceso de subida? Esto es importante porque el proceso de revisión de Apple puede agregar entre 3 y 10 días al cronograma y requiere una cuenta de Apple Developer activa de su parte.
+
+Quedo atento a sus respuestas para enviarle un cronograma detallado por semanas.
+
+Gracias. JunJun Mabod
+
+2 weeks ago 
+Hola, Edga.
+
+Propongo dividir el proyecto en cuatro fases, con hitos verificables.
+
+Fase 1 ($200)
+– Definición de la arquitectura final (documentación técnica aprobada).
+
+– Optimización de la estructura de Firestore para la escalabilidad.
+
+– Implementación de la autenticación basada en roles (cliente/técnico/administrador).
+
+– Configuración y pruebas de reglas de seguridad.
+
+Fase 2 ($700)
+– Finalización del flujo de solicitud de servicio.
+
+– Subida de imágenes a Firebase Storage.
+
+– Integración con Google Maps, incluyendo la función de captura de coordenadas.
+
+– Implementación del estado del servicio.
+
+Fase 3 ($500)
+– Sistema de cotizaciones configurable basado en reglas.
+
+– Implementación de un panel de administración funcional.
+
+– Enlaces profundos contextuales de WhatsApp.
+
+Fase 4 ($200)
+– Optimización de consultas.
+
+– Realización de pruebas de seguridad específicas para cada rol.
+
+– Preparación para la escalabilidad futura (preparación de la estructura para Cloud Functions y asignación automática en la Fase 2).
+
+– Entrega final y entrega completa de los proyectos de FlutterFlow y Firebase.
+
+El pago se puede dividir en cuatro fases según los resultados verificables.
+
+Mi enfoque no es simplemente entregar un MVP funcional, sino construir un MVP estructuralmente sólido desde el principio, eliminando la necesidad de reescribir la base de datos en la Fase 2.
+
+Si está de acuerdo con esta estructura, podemos empezar esta semana.
+
+JunJun.
+
+2 weeks ago 
+Hola Edgar,
+
+2 weeks ago 
+He dividido tu proyecto en cuatro etapas.
+¿Estás bien?
+
+Estoy esperando tu contacto.
+
+2 weeks ago 
+Hola JunJun,
+El presupuesto de $1,600 para la fase 1, es aceptable pero antes de arrancar necesito confirmar estos 5 puntos para esclarecer mis dudas:
+    1.    Operación: al inicio yo seré el técnico. Las solicitudes llegarán al panel admin y se asignarán manualmente (por ahora). Técnicos NO se auto-registran sin aprobación (si aplica, dime tu recomendación).
+    2.    Alcance Fase 1: registro/login por roles, creación de solicitud con fotos, ubicación en mapa, estimación básica por reglas, estados, panel admin y botón WhatsApp.
+    3.    Fase 2 (NO incluida ahora): pagos dentro de app/comisiones automáticas, asignación automática, reembolsos y split.
+    4.    Base escalable: dejar desde Fase 1 el modelo de datos y estados preparados para pagos/comisiones y asignación automática futura sin reestructurar Firestore. ( o si va incluido en la fase 1 de la app házmelo saber )
+    5.    Trabajo y control: 4 hitos verificables como propusiste, demo semanal, pagos contra validación. FlutterFlow y Firebase bajo mi cuenta con acceso total. NDA firmado.
+
+Si estás de acuerdo, dime fecha de inicio y duración total estimada (puede ser hasta 8 semanas no tengo problema mientras se conserve el presupuesto aprobado) y arrancamos con el Hito 1.
+
+2 weeks ago
+Gracias. Estoy de acuerdo con todo esto. Puedes empezar ahora mismo.
+
+2 weeks ago 
+El período esperado es de aproximadamente 3 semanas.
+
+2 weeks ago 
+Ahora solo falta que apruebes el contrato de mi oferta.
+
+2 weeks ago 
+👍
+
+2 weeks ago 
+Es  importante para mí saber si:
+    1.    La integración con pasarela de pago (Stripe, MercadoPago u otra) está incluida.
+    2.    El sistema puede calcular y retener automáticamente una comisión por cada servicio.
+    3.    La estructura quedará preparada para escalar este sistema en la Fase 2 sin tener que rehacer la base de datos.
+
+Por favor confírmame si esto está incluido en el alcance actual o si corresponde a una fase posterior, y cuál sería el tiempo y costo estimado si no está incluido.
+
+Quiero dejar este punto totalmente claro antes de aprobar.
+
+Gracias.
+
+2 weeks ago
+Estos tres pasos se incluirán en el siguiente paso.
+El siguiente paso también se puede completar en tres semanas.
+El costo estimado es de $2,000.
+O bien, dime cuál crees que sería el costo.
+Lo haré por ese precio.
+¿Cuánto estás considerando?
+
+2 weeks ago 
+OK?
+
+2 weeks ago 
+Tengo un presupuesto total de 3000 para todo el proyecto si te interesa hazme un desglose de la entrega de los hitos por semana
+
+2 weeks ago
+OK
+
+2 weeks ago 
+Luego, acepto un presupuesto total de $3,000.
+Me gustaría fijar la primera etapa en $1,600 y la segunda etapa, que incluye el pago de Stripe, en $1,400. ¿Estás bien?
+
+2 weeks ago 
+¿Qué opinas?
+
+2 weeks ago 
+OK?
+
+2 weeks ago 
+Perfecto.
+Voy a estructurarlo en 7 hitos totales (Fase 1 + Fase 2), manteniendo el presupuesto total de USD 3,000, con entregables verificables por semana y dejando la base preparada para escalabilidad real.
+
+Presupuesto Total: $3,000
+
+Duración estimada total: 5 semanas
+(3 semanas Fase 1 + 2 semanas Fase 2)
+
+FASE 1 – MVP Operativo (USD 1,600)
+Hito 1 – Arquitectura + Base Escalable
+
+Semana 1 – $300
+
+Entregables:
+
+Documento técnico aprobado (modelo de datos completo).
+
+Estructura Firestore preparada para:
+
+Roles (cliente / técnico / admin).
+
+Estados de servicio preparados para pagos futuros.
+
+Campos reservados para comisión, split y pagos.
+
+Configuración inicial Firebase.
+
+Reglas de seguridad por rol implementadas y testeadas.
+
+Autenticación funcional por roles.
+
+Resultado verificable: Login funcional + estructura base blindada.
+
+2 weeks ago 
+Hito 2 – Flujo de Solicitud de Servicio
+
+Semana 2 – $700
+
+Entregables:
+Creación de solicitud con:
+
+Descripción
+- Categoría
+- Subida de fotos (Firebase Storage)
+- Coordenadas capturadas con Google Maps
+- Geocodificación inversa.
+
+Estados básicos: pendiente / asignado / en progreso / completado.
+
+Vista técnica básica de solicitudes.
+
+Resultado verificable: Cliente crea solicitud completa y se guarda correctamente.
+
+2 weeks ago 
+Hito 3 – Panel Admin + Asignación Manual
+
+Semana 3 – $500
+
+Entregables:
+
+- Panel admin funcional.
+- Asignación manual de técnico.
+- Filtro por estado.
+- Vista por técnico.
+- WhatsApp deep link contextual (con ID de servicio).
+- Notificaciones básicas (según alcance FlutterFlow).
+
+Resultado verificable: Flujo completo desde creación hasta asignación.
+
+2 weeks ago 
+Hito 4 – Sistema de Estimación + Optimización
+
+Semana 3 (final) – $100
+
+Entregables:
+
+- Sistema de estimación basado en reglas configurables.
+- Colección “configuración de tarifas”.
+- Cálculo automático en app.
+- Optimización de consultas.
+- Testeo de reglas de seguridad.
+- Entrega completa del proyecto FlutterFlow + Firebase documentado.
+
+Resultado verificable: MVP listo para operar manualmente.
+
+Subtotal Fase 1: $1,600
+
+2 weeks ago 
+FASE 2 – Pagos, Comisión y Escalabilidad (USD 1,400)
+Hito 5 – Integración Stripe Base
+
+Semana 4 – $700
+
+Entregables:
+
+- Integración Stripe.
+- Creación de PaymentIntent.
+- Registro de pagos en Firestore.
+- Estados adicionales: pago_pendiente / pagado / fallido.
+- Webhooks configurados.
+
+Resultado verificable: Cliente puede pagar servicio dentro de la app.
+
+2 weeks ago 
+Hito 6 – Comisión Automática + Preparación Split
+
+Semana 5 – $500
+
+Entregables:
+
+- Cálculo automático de comisión.
+- Registro de comisión en documento de servicio.
+- Preparación estructura para Stripe Connect (si se requiere en Fase 3 futura).
+- Lógica backend para retención automática.
+- Logs financieros estructurados.
+
+Resultado verificable: El sistema retiene automáticamente comisión.
+
+2 weeks ago 
+Hito 7 – Base para Escalamiento + Hardening
+
+Semana 6 – $400
+
+Entregables:
+
+- Preparación estructura para asignación automática futura.
+- Índices compuestos optimizados.
+- Preparación para Cloud Functions.
+- Testeo completo de seguridad por rol.
+- Entrega definitiva y revisión conjunta.
+
+Resultado verificable: Sistema listo para crecer sin reestructurar Firestore.
+
+2 weeks ago 
+Resumen Financiero
+
+Fase 1: $1,600
+Fase 2: $1,400
+Total: $3,000
+
+2 weeks ago 
+Semana 6 – $200
+
+Entregables:
+
+- Preparación estructura para asignación automática futura.
+- Índices compuestos optimizados.
+- Preparación para Cloud Functions.
+- Testeo completo de seguridad por rol.
+- Entrega definitiva y revisión conjunta.
+
+Resultado verificable: Sistema listo para crecer sin reestructurar Firestore.
+
+2 weeks ago 
+Como podéis ver, estoy planeando continuar con este proyecto dividiéndolo en seis etapas.
+Te he enviado los pasos detallados.
+Por favor, revísenlo y contáctenme.
+Gracias.
+
+JunJun
+
+2 weeks ago 
+Hola Edgar,
+
+2 weeks ago 
+JunJun,
+
+Antes de aprobar quiero aclarar dos puntos:
+    1.    ¿La duración total final es 5 semanas o 6 semanas?
+    2.    En el último hito mencionas $400 y luego $200 para Semana 6. ¿Cuál es el monto correcto? O son 7 semanas al igual que los hitos?
+
+Quiero que el cronograma y los montos queden completamente claros en Workana antes de aprobar.
+
+Gracias.
+
+2 weeks ago
+6 semanas
+
+2 weeks ago 
+Semana 6 – $200
+
+2 weeks ago 
+$400 es el mensaje que envié porque calculé mal. Así que lo corregí y te envié $200.
+
+2 weeks ago 
+OK?
+
+2 weeks ago 
+Estoy esperando tu contacto.
+
+Gracias.
+
+2 weeks ago 
+Me parece perfecto jun jun, carga los hitos tal cual los planteaste y en 7 horas empezamos con el primer hito.
+
+2 weeks ago
+Si puedo confirmar antes, antes será, pero es un echo que hacemos el proyecto juntos, solo te pido este tiempo por qué me voy a ocupar y estaré libre después de estas horas , quedo pendiente y muchas gracias por tu tiempo y atención
+
+2 weeks ago
+En cuanto tengas todo listo me mandas un mensaje
+
+2 weeks ago
+Entiendo.
+
+Sin embargo, no puedo negociar un contrato por hitos.
+
+2 weeks ago 
+El contrato es por un total de $3000 y te proporcionaré los resultados paso a paso y me pagarás el % correspondiente por cada paso luego de confirmarlo.
+
+2 weeks ago 
+Para ser más específico, después de firmar el contrato, puedes pagarme en forma de 10%, 20%, 30%... 90%, 100%.
+
+2 weeks ago 
+Entonces, el primer hito es de $300, entonces cuando le envío el resultado del primer hito, usted lo confirma y me paga el % correspondiente del monto contratado.
+
+2 weeks ago 
+¿Lo entiendes?
+
+2 weeks ago 
+Correcto
+
+2 weeks ago
+No tengo problema
+
+2 weeks ago
+Entonces, ¿debería enviarte otra oferta de $3000?
+
+2 weeks ago 
+Luego puedes aprobar esto y pagarme en función de cada hito.
+
+2 weeks ago 
+Cada hito puede ser comprobado antes ser liberado el pago?
+
+2 weeks ago
+Yes
+
+2 weeks ago 
+Tú puedes hacerlo.
+
+2 weeks ago 
+Déjame decirlo nuevamente, solo necesitas verificar cada paso y pagar en %.
+
+2 weeks ago 
+OK?
+
+2 weeks ago 
+¿El monto total quedará en garantía dentro de Workana y los pagos se liberarán únicamente después de verificar cada entrega?
+
+2 weeks ago
+Yes
+
+2 weeks ago 
+👍
+
+2 weeks ago 
+Estoy disponible ya creaste el contrato?
+
+2 weeks ago
+En ese caso, me gustaría volver a enviarle una oferta de $3000.
+
+2 weeks ago 
+OK?
+
+2 weeks ago 
+Hola Edgar,
+
+2 weeks ago 
+Si es posible en 2 partes es mejor para mi
+
+2 weeks ago
+No puedes hacer eso. Como dije ayer, puedes firmar el contrato completo y luego pagar por etapas.
+
+2 weeks ago 
+Eso significa que puedes aceptar mi propuesta por $3000 y pagar solo por hito (%).
+
+2 weeks ago 
+¿Entiendes lo que quiero decir?
+
+2 weeks ago 
+¿Qué tal si primero firmamos la fase 1 y luego firmamos la fase 2 después de completar la fase 1?
+
+2 weeks ago 
+Okey, puedo firmar por los 3000 el jueve, devido a que aún no me liberan el resto del presupuesto, por eso quería ir pagando por hitos, pero el jueves puedo tener disponible todo el presupuesto, si no te incomoda esperar al jueves de la próxima semana podemos firmar por los 3000 él mismo jueves 26 de febrero
+
+2 weeks ago
+Te parece?
+
+2 weeks ago
+¿Qué tal entonces firmar el contrato ahora por $1600 y luego proceder al paso 2 una vez completado el paso 1?
+
+2 weeks ago 
+Hola Edgar,
+
+2 weeks ago 
+Hola Edgar,
+
+2 weeks ago 
+Está bien
+
+2 weeks ago
+Si es así, por favor acepte mi oferta. Una vez aceptada la oferta se podrá iniciar el trabajo.
+
+2 weeks ago 
+Thank you
+
+2 weeks ago 
+Si deposita dinero en depósito, puedo comenzar a trabajar en ello.
+
+2 weeks ago 
+JunJun,
+
+Quiero actualizar el acuerdo.
+
+Como sabes, actualmente está aceptada la propuesta de $1,600. Sin embargo, después de revisar el proyecto con los inversionistas, decidieron que es mejor avanzar directamente con el contrato completo de $3,000 (Fase 1 + Fase 2) para asegurar toda la estructura desde el inicio.
+
+Inicialmente te comenté que los fondos estarían disponibles hasta el jueves de la próxima semana, pero logré adelantar la liberación para este lunes.
+
+El aplazamiento no fue una decisión mía, sino parte del proceso interno de liberación de fondos por parte de ellos. El lunes financiaré el contrato completo sin falta.
+
+Por favor mantén activa la propuesta hasta entonces. Estoy completamente comprometido con iniciar de inmediato.
+
+Gracias por tu comprensión.
+
+Edgar
+
+2 weeks ago
+Thank you.
+
+2 weeks ago 
+Hola Edgar,
+
+1 week ago 
+JunJun,
+
+Actualmente está aceptada la propuesta de $1,600, pero quiero avanzar con el proyecto completo de $3,000 como acordamos (Fase 1 + Fase 2).
+
+Ya tengo disponible el monto total del presupuesto para financiar el contrato completo.
+
+Por favor cancela la propuesta actual y envíame la propuesta actualizada por el total de $3,000 con la estructura de hitos que definimos.
+
+En cuanto la reciba, la financiaré de inmediato.
+
+Quedo atento.
+
+Edgar
+
+6 days ago
+O projeto encontra-se atualmente em fase de contrato. Portanto, não posso atualizar o preço atual para US$ 3.000. Por favor, publique um novo projeto e eu farei uma nova proposta.
+
+6 days ago 
+OKay?
+
+6 days ago 
+Você entende o que estou dizendo?
+
+6 days ago 
+Proposal
+USD 3,000.00
+Bid amount: USD 3,000.00
+
+
+Description
+
+Hola Edgar,
+
+La decisión de construir el MVP con FlutterFlow y Firebase es acertada para validar rápido, pero el riesgo real está en cómo se estructura Firestore desde el día uno, porque un modelo de datos mal diseñado en esta fase se convierte en deuda técnica que obliga a reescribir toda la base cuando la app necesite escalar en la Fase 2, y eso cuesta más que haberlo hecho bien desde el inicio.
+
+En los últimos tres años trabajé en dos proyectos con un alcance prácticamente idéntico. El primero fue un MVP de servicios de limpieza a domicilio donde construí la app completa en FlutterFlow con Firebase como backend, incluyendo registro dual para clientes y prestadores, solicitudes de servicio con carga de fotos, geolocalización con Google Maps para mostrar la ubicación del cliente al prestador, y un panel de administración para gestionar todas las solicitudes en tiempo real. Ese MVP se lanzó en 4 semanas y el cliente lo usó para validar su modelo de negocio con 200 usuarios reales antes de invertir en una versión más robusta. El segundo fue una app de mantenimiento técnico para edificios residenciales, también con FlutterFlow y Firebase, donde implementé un sistema de estimación de costos basado en reglas configurables según tipo de servicio, urgencia y zona geográfica, además de integración con WhatsApp Business para que el técnico y el cliente pudieran comunicarse directamente con un solo toque. Lo que aprendí en ambos proyectos es que el éxito de un MVP de servicios a domicilio no depende de cuántas funcionalidades tiene, sino de que el flujo desde que el cliente crea la solicitud hasta que el técnico la recibe sea tan simple que no requiera explicación.
+
+Para la estructura de Firestore, diseñaría colecciones separadas para usuarios con un campo de rol que distingue entre cliente, técnico y administrador, solicitudes de servicio con documentos que almacenan la descripción, fotos en Firebase Storage con referencia en el documento, coordenadas de geolocalización, estado del servicio y timestamp, y una subcolección de estimaciones vinculada a cada solicitud. Esta estructura permite hacer queries eficientes por estado, por técnico asignado y por proximidad geográfica usando GeoHash, que es la estrategia recomendada para búsquedas por ubicación en Firestore ya que no soporta índices geoespaciales nativos como MongoDB. Las reglas de seguridad de Firestore las configuraría para que cada cliente solo pueda ver sus propias solicitudes, cada técnico solo las que tiene asignadas, y el administrador tenga acceso completo, evitando así que un usuario pueda leer datos de otro desde el primer día.
+
+El sistema de estimación de costos basado en reglas simples lo implementaría con una colección de configuración en Firestore donde el administrador pueda definir tarifas base por categoría de servicio, multiplicadores por urgencia y recargos por distancia o horario. FlutterFlow permite crear la lógica condicional directamente en el flujo visual sin necesidad de Cloud Functions para reglas simples, lo que mantiene el MVP ligero y fácil de modificar sin tocar código. Si en el futuro las reglas se vuelven más complejas, la migración a Cloud Functions sería directa porque los datos ya estarían estructurados correctamente.
+
+Para la integración de Google Maps, usaría el widget nativo de FlutterFlow que ya soporta Google Maps API, capturando las coordenadas del cliente al momento de crear la solicitud con opción de ajustar manualmente el pin si la detección automática no es precisa. En el lado del técnico y del administrador, esas coordenadas se mostrarían en un mapa con la dirección formateada usando Geocoding inverso, para que puedan visualizar dónde está el servicio sin necesidad de copiar direcciones a otra app.
+
+El botón de contacto lo implementaría con doble opción: un enlace directo a WhatsApp con mensaje prellenado que incluya el número de solicitud para que la conversación tenga contexto desde el primer mensaje, y paralelamente un chat simple dentro de la app usando Firestore como backend de mensajería en tiempo real con listeners de snapshot. Esto le da al cliente la flexibilidad de elegir cómo comunicarse sin forzarlo a salir de la app si no quiere.
+
+Respecto al entregable, el proyecto se entregaría con acceso completo al proyecto de FlutterFlow transferido a su cuenta, el proyecto de Firebase con todas las colecciones, reglas de seguridad e índices documentados, y un documento breve que explique la estructura de datos y las decisiones técnicas tomadas, para que cualquier desarrollador pueda continuar el trabajo en la Fase 2 sin depender de mí.
+
+Antes de definir el cronograma y presupuesto exacto, necesito clarificar tres puntos:
+
+Primero, cuando mencionas registro para clientes y técnicos, ¿los técnicos se registran de forma autónoma en la app o son dados de alta exclusivamente por el administrador desde el panel? Esto cambia significativamente el flujo de onboarding y las validaciones necesarias, porque si los técnicos se autorregistran necesitaríamos un proceso de verificación o aprobación antes de que puedan recibir solicitudes.
+
+Segundo, la asignación de técnicos a las solicitudes, ¿será manual desde el panel de administración o esperan que el MVP ya incluya alguna lógica automática de asignación basada en proximidad o disponibilidad? Para un MVP recomendaría asignación manual con notificación push al técnico seleccionado, pero quiero confirmar su expectativa.
+
+Tercero, ¿la app debe publicarse en Google Play y App Store como parte de esta Fase 1, o el entregable es la app funcional lista para publicación y ustedes gestionan las cuentas de desarrollador y el proceso de subida? Esto es importante porque el proceso de revisión de Apple puede agregar entre 3 y 10 días al cronograma y requiere una cuenta de Apple Developer activa de su parte.
+
+Quedo atento a sus respuestas para enviarle un cronograma detallado por semanas.
+
+Gracias. JunJun Mabod
+
+6 days ago 
+Okay?
+
+6 days ago 
+Hola Edgar.
+
+6 days ago 
+JunJun,
+
+Antes de financiar el contrato, necesito que la propuesta formal dentro de Workana incluya explícitamente el alcance completo del proyecto, es decir, Fase 1 y Fase 2, dentro del monto total de $3,000.
+
+Quiero aceptar el último contrato que me enviaste donde detallabas ambas fases, los hitos por semana y el tiempo estimado de entrega. Ese es el alcance completo que deseo formalizar.
+
+Es importante que en el contrato queden claramente estipulados:
+
+– Desarrollo completo del MVP (Fase 1)
+– Integración de Stripe
+– Sistema de pagos dentro de la app
+– Cálculo y retención automática de comisión
+– Preparación para escalabilidad futura
+– Duración estimada y estructura por hitos como fue descrita
+
+Necesito que todo el alcance acordado quede por escrito dentro del contrato formal para evitar cualquier ambigüedad.
+
+Por favor envíame la propuesta actualizada con ambas fases incluidas y en cuanto esté correcta procederé a financiarla.
+
+Gracias.
+
+Edgar
+
+6 days ago
+OK
+
+6 days ago 
+Proposal
+USD 3,000.00
+Bid amount: USD 3,000.00
+
+/ Accepted on: February 23, 2026 18:19
+
+
+Description
+
+Hola Edgar,
+
+Gracias por tu mensaje y la claridad respecto al alcance que deseas formalizar.
+
+Confirmo lo siguiente:
+
+Alcance completo incluido en el contrato
+
+Fase 1 – MVP Operativo (USD 1,600, 3 semanas)
+
+Hito 1 – Arquitectura + Base Escalable (Semana 1 – $300)
+
+Documento técnico aprobado con modelo de datos completo.
+
+Estructura Firestore preparada para roles (cliente / técnico / administrador).
+
+Estados de servicio preparados para pagos futuros.
+
+Campos reservados para comisión, split y pagos.
+
+Configuración inicial Firebase.
+
+Reglas de seguridad por rol implementadas y testeadas.
+
+Autenticación funcional por roles.
+
+Resultado verificable: Login funcional + estructura base blindada.
+
+Hito 2 – Flujo de Solicitud de Servicio (Semana 2 – $700)
+
+Creación de solicitud con descripción, categoría, subida de fotos (Firebase Storage).
+
+Captura de coordenadas con Google Maps y geocodificación inversa.
+
+Estados básicos: pendiente / asignado / en progreso / completado.
+
+Vista técnica básica de solicitudes.
+
+Resultado verificable: Cliente crea solicitud completa y se guarda correctamente.
+
+Hito 3 – Panel Admin + Asignación Manual (Semana 3 – $500)
+
+Panel admin funcional.
+
+Asignación manual de técnico.
+
+Filtro por estado y vista por técnico.
+
+WhatsApp deep link contextual (con ID de servicio).
+
+Notificaciones básicas (según alcance FlutterFlow).
+
+Resultado verificable: Flujo completo desde creación hasta asignación.
+
+Hito 4 – Sistema de Estimación + Optimización (Semana 3 final – $100)
+
+Sistema de estimación basado en reglas configurables.
+
+Colección “configuración de tarifas”.
+
+Cálculo automático en app.
+
+Optimización de consultas.
+
+Testeo de reglas de seguridad.
+
+Entrega completa del proyecto FlutterFlow + Firebase documentado.
+
+Resultado verificable: MVP listo para operar manualmente.
+
+Fase 2 – Pagos, Comisión y Escalabilidad (USD 1,400, 3 semanas)
+
+Hito 5 – Integración Stripe Base (Semana 4 – $700)
+
+Integración Stripe y creación de PaymentIntent.
+
+Registro de pagos en Firestore.
+
+Estados adicionales: pago_pendiente / pagado / fallido.
+
+Webhooks configurados.
+
+Resultado verificable: Cliente puede pagar servicio dentro de la app.
+
+Hito 6 – Comisión Automática + Preparación Split (Semana 5 – $500)
+
+Cálculo automático de comisión.
+
+Registro de comisión en documento de servicio.
+
+Preparación estructura para Stripe Connect (para futura Fase 3).
+
+Lógica backend para retención automática.
+
+Logs financieros estructurados.
+
+Resultado verificable: El sistema retiene automáticamente comisión.
+
+Hito 7 – Base para Escalamiento + Hardening (Semana 6 – $200)
+
+Preparación estructura para asignación automática futura.
+
+Índices compuestos optimizados.
+
+Preparación para Cloud Functions.
+
+Testeo completo de seguridad por rol.
+
+Entrega definitiva y revisión conjunta.
+
+Resultado verificable: Sistema listo para crecer sin reestructurar Firestore.
+
+Resumen financiero y duración
+
+Fase 1: $1,600
+
+Fase 2: $1,400
+
+Total contrato: $3,000
+
+Duración total estimada: 6 semanas
+
+Cada hito se entregará con resultado verificable que podrás validar antes de liberar el pago correspondiente.
+
+Saludos,
+JunJun Mabod
+
+6 days ago 
+Okay?
+
+6 days ago 
+JunJun,
+
+Confirmo que el alcance está correcto.
+
+Solo necesito que quede explícito en la propuesta que al finalizar el proyecto se transferirá completamente a mi cuenta el proyecto de FlutterFlow y Firebase con acceso total editable, o que el desarrollo se realice directamente en mis cuentas desde el inicio.
+
+En cuanto confirmes ese punto, procedo a financiar.
+
+6 days ago
+Hola Edgar,
+
+Gracias por tu confirmación.
+
+Al finalizar el proyecto, todo el proyecto de FlutterFlow y Firebase se transferirá completamente a tu cuenta, con acceso total editable.
+
+Quedo atento a tu confirmación para proceder de inmediato.
+
+Saludos,
+JunJun Mabod
+
+6 days ago 
+The bid made by JunJun Mabod has been accepted and the project has entered the escrow stage.
+
+During this stage, no work should be done until Edgar Daniel Godoy Montalvo makes the full payment of the bid, which will be held in escrow.
+
+Once the escrow process is completed, both parties are notified and work can begin.
+
+
+6 days ago
+Thank you.
+
+6 days ago 
+Una vez que pague el dinero en depósito, podemos comenzar a trabajar de inmediato.
+
+6 days ago 
+JunJun,
+
+El presupuesto está listo y disponible, pero estoy teniendo un problema técnico con el procesamiento del pago en la plataforma.
+
+Ya estoy gestionándolo con el banco y espero resolverlo lo antes posible.
+El proyecto sigue en pie y mi intención es financiarlo en cuanto el sistema lo permita.
+
+Te aviso apenas quede solucionado.
+
+Gracias por tu comprensión.
+
+Edgar
+
+6 days ago
+Entiendo. Espero que esto se resuelva lo antes posible. Espero escuchar buenas noticias.
+
+6 days ago 
+Hola Edgar
+
+4 days ago 
+Hola Edgar
+
+3 days ago 
+The amount of the bid made by JunJun Mabod has been paid by Edgar Daniel Godoy Montalvo and is now in escrow, so work on this project can begin.
+
+
+2 days ago
+JunJun,
+
+Gracias por tu paciencia.
+
+Ya he realizado el depósito en garantía del proyecto. Podemos comenzar oficialmente a trabajar.
+
+Disculpa la demora mientras resolvía el tema del pago.
+
+Quedo atento a los primeros pasos para iniciar el Hito 1 y al documento técnico de arquitectura que mencionamos.
+
+Avancemos.
+
+Edgar
+
+2 days ago
+Hola Edgar
+
+5 hours ago 
+Lamento mucho la respuesta tardía.
+
+5 hours ago 
+Es fin de semana así que acabo de revisar mis mensajes.
+
+5 hours ago 
+JunJun,
+
+Gracias por responder, no hay problema.
+
+Perfecto, iniciemos con el Hito 1.
+
+Por favor compárteme:
+    1.    El documento técnico con el modelo de datos propuesto.
+    2.    La estructura inicial de Firestore.
+    3.    Qué accesos necesitas de mi parte para comenzar en mis cuentas.
+
+Quiero revisar la arquitectura antes de avanzar con la implementación.
+
+Avancemos.
+
+Edgar
+
+Almost an hour ago
+Muchas gracias por contactarnos.
+
+Nos gustaría usar otra herramienta para mantener una comunicación más fluida.
+Tenemos un contrato con ustedes, por lo que podemos comunicarnos externamente.
+¿Qué utilizan?
+Les agradeceríamos que nos lo hicieran saber.
+
+Esperamos tener noticias suyas.
+
+JunJun

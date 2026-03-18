@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "709333360623",
+    "project_id": "servicios-domicilio-mvp",
+    "storage_bucket": "servicios-domicilio-mvp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:709333360623:android:e65a6f679352994d0fa01a",
+        "android_client_info": {
+          "package_name": "com.serviciosdomicilio.mvp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9qZ3vYnQKDdrQRmhiWI2RSb3oyKE4RU0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
