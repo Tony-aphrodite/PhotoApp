@@ -132,6 +132,7 @@ export const handleStripeWebhook = functions.https.onRequest(
 
 /**
  * Handle successful payment
+ * Includes idempotency check to prevent duplicate processing from webhook retries
  */
 async function handlePaymentSuccess(paymentIntent: any) {
   const { servicioId, clienteId, tecnicoId } = paymentIntent.metadata;
@@ -141,7 +142,36 @@ async function handlePaymentSuccess(paymentIntent: any) {
     return;
   }
 
-  // Get commission config
+  // --- IDEMPOTENCY CHECK ---
+  // Verify this payment hasn't already been processed
+  const existingTx = await db
+    .collection("transacciones")
+    .where("stripePaymentIntentId", "==", paymentIntent.id)
+    .limit(1)
+    .get();
+
+  if (!existingTx.empty) {
+    console.log(
+      `Payment already processed for PaymentIntent: ${paymentIntent.id}. Skipping duplicate.`
+    );
+    return;
+  }
+
+  // Verify service is in a valid state for payment processing
+  const serviceDoc = await db.collection("servicios").doc(servicioId).get();
+  if (!serviceDoc.exists) {
+    console.error(`Service ${servicioId} not found during payment processing`);
+    return;
+  }
+
+  const serviceData = serviceDoc.data()!;
+  if (serviceData.estado === "pagado") {
+    console.log(`Service ${servicioId} already marked as paid. Skipping.`);
+    return;
+  }
+
+  // --- COMMISSION CALCULATION ---
+  // Get commission config from admin settings
   const configDoc = await db
     .collection("configuracion")
     .doc("comisiones")
@@ -151,13 +181,18 @@ async function handlePaymentSuccess(paymentIntent: any) {
     : 15;
 
   const montoTotal = paymentIntent.amount / 100; // cents to dollars
-  const comisionPlataforma = montoTotal * (porcentajePlataforma / 100);
-  const comisionStripe = montoTotal * 0.029 + 0.3;
-  const montoTecnico = montoTotal - comisionPlataforma - comisionStripe;
+  const comisionPlataforma = parseFloat(
+    (montoTotal * (porcentajePlataforma / 100)).toFixed(2)
+  );
+  const comisionStripe = parseFloat((montoTotal * 0.029 + 0.3).toFixed(2));
+  const montoTecnico = parseFloat(
+    (montoTotal - comisionPlataforma - comisionStripe).toFixed(2)
+  );
 
+  // --- ATOMIC BATCH WRITE ---
   const batch = db.batch();
 
-  // Create transaction record
+  // Create transaction record with full financial breakdown
   const txRef = db.collection("transacciones").doc();
   batch.set(txRef, {
     servicioId,
@@ -167,6 +202,7 @@ async function handlePaymentSuccess(paymentIntent: any) {
     comisionPlataforma,
     comisionStripe,
     montoTecnico,
+    porcentajeComision: porcentajePlataforma,
     stripePaymentIntentId: paymentIntent.id,
     stripeChargeId: paymentIntent.latest_charge || null,
     estado: "completado",
@@ -174,10 +210,11 @@ async function handlePaymentSuccess(paymentIntent: any) {
     completedAt: admin.firestore.FieldValue.serverTimestamp(),
     metadata: {
       metodoPago: "tarjeta",
+      moneda: paymentIntent.currency || "usd",
     },
   });
 
-  // Update service
+  // Update service with payment information
   const serviceRef = db.collection("servicios").doc(servicioId);
   batch.update(serviceRef, {
     estado: "pagado",
@@ -190,28 +227,131 @@ async function handlePaymentSuccess(paymentIntent: any) {
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
+  // Update technician's completed service count
+  if (tecnicoId) {
+    const techRef = db.collection("users").doc(tecnicoId);
+    batch.update(techRef, {
+      serviciosCompletados: admin.firestore.FieldValue.increment(1),
+    });
+  }
+
   await batch.commit();
 
-  console.log(
-    `Payment processed: Service ${servicioId}, Amount $${montoTotal}, ` +
-      `Commission $${comisionPlataforma.toFixed(2)}, Technician $${montoTecnico.toFixed(2)}`
-  );
+  // --- STRUCTURED LOG for auditing ---
+  const logEntry = {
+    type: "TRANSACTION_COMPLETED",
+    transaccionId: txRef.id,
+    servicioId,
+    clienteId,
+    tecnicoId,
+    montoTotal,
+    comisionPlataforma,
+    comisionStripe,
+    montoTecnico,
+    porcentajeComision: porcentajePlataforma,
+    stripePaymentIntentId: paymentIntent.id,
+    estado: "completado",
+    timestamp: new Date().toISOString(),
+  };
+
+  console.log("FINANCIAL_LOG:", JSON.stringify(logEntry));
+
+  // --- SEND NOTIFICATIONS ---
+  await sendPaymentNotifications(servicioId, clienteId, tecnicoId, montoTotal, montoTecnico);
+}
+
+/**
+ * Send push notifications after successful payment
+ */
+async function sendPaymentNotifications(
+  servicioId: string,
+  clienteId: string,
+  tecnicoId: string,
+  montoTotal: number,
+  montoTecnico: number
+) {
+  try {
+    // Notify client: payment confirmed
+    if (clienteId) {
+      const clientDoc = await db.collection("users").doc(clienteId).get();
+      const clientToken = clientDoc.data()?.fcmToken;
+      if (clientToken) {
+        await admin.messaging().send({
+          token: clientToken,
+          notification: {
+            title: "Pago Confirmado",
+            body: `Tu pago de $${montoTotal.toFixed(2)} ha sido procesado exitosamente.`,
+          },
+          data: { servicioId, type: "payment_confirmed" },
+        });
+      }
+    }
+
+    // Notify technician: payment received
+    if (tecnicoId) {
+      const techDoc = await db.collection("users").doc(tecnicoId).get();
+      const techToken = techDoc.data()?.fcmToken;
+      if (techToken) {
+        await admin.messaging().send({
+          token: techToken,
+          notification: {
+            title: "Pago Recibido",
+            body: `Has recibido $${montoTecnico.toFixed(2)} por tu servicio completado.`,
+          },
+          data: { servicioId, type: "payment_received" },
+        });
+      }
+    }
+  } catch (error: any) {
+    // Notification failures should not block payment processing
+    console.error("Error sending payment notifications:", error.message);
+  }
 }
 
 /**
  * Handle failed payment
+ * Updates service status and notifies the client to retry
  */
 async function handlePaymentFailed(paymentIntent: any) {
-  const { servicioId } = paymentIntent.metadata;
+  const { servicioId, clienteId } = paymentIntent.metadata;
 
   if (!servicioId) return;
 
   await db.collection("servicios").doc(servicioId).update({
     stripePaymentStatus: "failed",
+    estadoPago: "fallido",
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  console.log(`Payment failed for service: ${servicioId}`);
+  // Log failed payment for monitoring
+  console.log("FINANCIAL_LOG:", JSON.stringify({
+    type: "PAYMENT_FAILED",
+    servicioId,
+    clienteId,
+    stripePaymentIntentId: paymentIntent.id,
+    failureMessage: paymentIntent.last_payment_error?.message || "Unknown error",
+    timestamp: new Date().toISOString(),
+  }));
+
+  // Notify client about failed payment
+  if (clienteId) {
+    try {
+      const clientDoc = await db.collection("users").doc(clienteId).get();
+      const clientToken = clientDoc.data()?.fcmToken;
+      if (clientToken) {
+        await admin.messaging().send({
+          token: clientToken,
+          notification: {
+            title: "Error en el Pago",
+            body: "Tu pago no pudo ser procesado. Por favor, intenta de nuevo.",
+          },
+          data: { servicioId, type: "payment_failed" },
+        });
+      }
+    } catch (error: any) {
+      console.error("Error sending failure notification:", error.message);
+    }
+  }
 }
 
 /**

@@ -141,5 +141,89 @@ service cloud.firestore {
       allow update: if false; // Only via Cloud Functions
       allow delete: if isAdmin();
     }
+
+    // ===== COTIZACIONES COLLECTION (Diagnostic Quotations) =====
+    match /cotizaciones/{cotizacionId} {
+      // Lectura: admin, cliente del servicio, técnico que creó la cotización
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.clienteId == request.auth.uid ||
+        resource.data.tecnicoId == request.auth.uid
+      );
+
+      // Creación: solo técnicos asignados al servicio
+      allow create: if isAuthenticated() &&
+                      isTecnico() &&
+                      request.resource.data.tecnicoId == request.auth.uid &&
+                      request.resource.data.estado == 'pendiente';
+
+      // Actualización:
+      // - Técnico: puede editar mientras estado sea 'pendiente'
+      // - Cliente: solo puede cambiar estado a 'aprobada' o 'rechazada'
+      // - Admin: puede todo
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isTecnico() &&
+         resource.data.tecnicoId == request.auth.uid &&
+         resource.data.estado == 'pendiente') ||
+        (isCliente() &&
+         resource.data.clienteId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']) &&
+         request.resource.data.estado in ['aprobada', 'rechazada'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ===== CITAS COLLECTION (Appointments) =====
+    match /citas/{citaId} {
+      // Lectura: admin, cliente de la cita, técnico de la cita
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.clienteId == request.auth.uid ||
+        resource.data.tecnicoId == request.auth.uid
+      );
+
+      // Creación: clientes autenticados
+      allow create: if isAuthenticated() &&
+                      (isCliente() || isAdmin()) &&
+                      request.resource.data.estado == 'programada';
+
+      // Actualización:
+      // - Admin: puede todo
+      // - Técnico: puede confirmar, completar, marcar no_asistio
+      // - Cliente: puede cancelar
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isTecnico() &&
+         resource.data.tecnicoId == request.auth.uid &&
+         request.resource.data.estado in ['confirmada', 'completada', 'no_asistio']) ||
+        (isCliente() &&
+         resource.data.clienteId == request.auth.uid &&
+         request.resource.data.estado == 'cancelada' &&
+         resource.data.estado in ['programada', 'confirmada'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ===== VALIDACION_DOCUMENTOS (Technician Document Validation) =====
+    match /validacion_documentos/{userId} {
+      // Lectura: admin o el propio técnico
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        request.auth.uid == userId
+      );
+
+      // Creación/Actualización: técnico sube sus documentos, admin aprueba/rechaza
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isAdmin()
+      );
+
+      allow delete: if isAdmin();
+    }
   }
 }

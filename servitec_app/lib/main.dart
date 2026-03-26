@@ -25,8 +25,11 @@ void main() async {
   );
 
   // Initialize Stripe
-  // TODO: Replace with your Stripe publishable key
-  Stripe.publishableKey = 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY';
+  // Configure with your Stripe publishable key from environment or const
+  Stripe.publishableKey = const String.fromEnvironment(
+    'STRIPE_PUBLISHABLE_KEY',
+    defaultValue: 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY',
+  );
 
   // Initialize notifications
   await NotificationService().initialize();

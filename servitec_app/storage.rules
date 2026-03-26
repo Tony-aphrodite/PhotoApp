@@ -2,7 +2,7 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Profile photos
+    // Profile photos - only the user can upload their own photo
     match /usuarios/{userId}/perfil/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == userId &&
@@ -10,12 +10,52 @@ service firebase.storage {
                      request.resource.contentType.matches('image/.*');
     }
 
-    // Service photos
+    // Service photos - only authenticated users can upload
     match /servicios/{servicioId}/{fileName} {
       allow read: if request.auth != null;
       allow write: if request.auth != null &&
                      request.resource.size < 10 * 1024 * 1024 &&
                      request.resource.contentType.matches('image/.*');
+    }
+
+    // Diagnostic photos - technician uploads during diagnostic visit
+    match /diagnosticos/{servicioId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null &&
+                     request.resource.size < 10 * 1024 * 1024 &&
+                     request.resource.contentType.matches('image/.*');
+    }
+
+    // Technician validation documents (INE, CURP, comprobante de domicilio)
+    match /validacion/{userId}/{fileName} {
+      allow read: if request.auth != null && (
+                     request.auth.uid == userId ||
+                     isAdmin()
+                   );
+      allow write: if request.auth != null && request.auth.uid == userId &&
+                     request.resource.size < 10 * 1024 * 1024 &&
+                     (request.resource.contentType.matches('image/.*') ||
+                      request.resource.contentType == 'application/pdf');
+    }
+
+    // Technician certifications
+    match /certificaciones/{userId}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId &&
+                     request.resource.size < 10 * 1024 * 1024 &&
+                     (request.resource.contentType.matches('image/.*') ||
+                      request.resource.contentType == 'application/pdf');
+    }
+
+    // Deny all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Helper function to check admin role
+    function isAdmin() {
+      return request.auth != null &&
+             firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.rol == 'admin';
     }
   }
 }
