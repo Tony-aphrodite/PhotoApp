@@ -8,8 +8,36 @@ import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
 
-class ClientServicesScreen extends StatelessWidget {
+class ClientServicesScreen extends StatefulWidget {
   const ClientServicesScreen({super.key});
+
+  @override
+  State<ClientServicesScreen> createState() => _ClientServicesScreenState();
+}
+
+class _ClientServicesScreenState extends State<ClientServicesScreen> {
+  static const int _pageSize = 10;
+  int _displayLimit = _pageSize;
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (mounted) setState(() => _displayLimit += _pageSize);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,9 +55,9 @@ class ClientServicesScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final services = snapshot.data ?? [];
+          final allServices = snapshot.data ?? [];
 
-          if (services.isEmpty) {
+          if (allServices.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -48,15 +76,26 @@ class ClientServicesScreen extends StatelessWidget {
             );
           }
 
+          final displayed = allServices.take(_displayLimit).toList();
+          final hasMore = allServices.length > _displayLimit;
+
           return ListView.builder(
+            controller: _scrollController,
             padding: const EdgeInsets.only(top: 8, bottom: 80),
-            itemCount: services.length,
+            itemCount: displayed.length + (hasMore ? 1 : 0),
             itemBuilder: (context, index) {
-              final service = services[index];
-              return ServiceCard(
-                service: service,
-                showTechnician: true,
-                onTap: () => context.push('/service/${service.id}'),
+              if (index < displayed.length) {
+                final service = displayed[index];
+                return ServiceCard(
+                  service: service,
+                  showTechnician: true,
+                  onTap: () => context.push('/service/${service.id}'),
+                );
+              }
+              // Loading indicator at bottom for infinite scroll
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
               );
             },
           );

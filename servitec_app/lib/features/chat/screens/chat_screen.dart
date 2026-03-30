@@ -20,11 +20,41 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
 
+  // Lazy loading older messages
+  final List<MessageModel> _olderMessages = [];
+  bool _loadingOlder = false;
+  bool _hasMoreOlder = true;
+
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadOlderMessages(DateTime oldestTimestamp) async {
+    if (_loadingOlder || !_hasMoreOlder) return;
+    setState(() => _loadingOlder = true);
+
+    try {
+      final older = await context
+          .read<ServiceRepository>()
+          .getMessagesBefore(widget.serviceId, oldestTimestamp);
+
+      if (mounted) {
+        setState(() {
+          // Prepend older messages, avoid duplicates by id
+          final existingIds = _olderMessages.map((m) => m.id).toSet();
+          final newOlder =
+              older.where((m) => !existingIds.contains(m.id)).toList();
+          _olderMessages.insertAll(0, newOlder);
+          _hasMoreOlder = older.length >= 30;
+          _loadingOlder = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingOlder = false);
+    }
   }
 
   void _sendMessage() {
@@ -82,9 +112,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final messages = snapshot.data ?? [];
+                final streamMessages = snapshot.data ?? [];
 
-                if (messages.isEmpty) {
+                // Merge older + stream messages (no duplicates)
+                final streamIds = streamMessages.map((m) => m.id).toSet();
+                final dedupedOlder = _olderMessages
+                    .where((m) => !streamIds.contains(m.id))
+                    .toList();
+                final allMessages = [...dedupedOlder, ...streamMessages];
+
+                if (allMessages.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -110,12 +147,38 @@ class _ChatScreenState extends State<ChatScreen> {
                   );
                 }
 
+                // First message timestamp for lazy load cursor
+                final oldestTimestamp = allMessages.first.timestamp;
+
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
+                  itemCount: allMessages.length + 1, // +1 for header
                   itemBuilder: (context, index) {
-                    final message = messages[index];
+                    // Header: "Load older" button
+                    if (index == 0) {
+                      if (!_hasMoreOlder) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Center(
+                          child: _loadingOlder
+                              ? const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                )
+                              : TextButton.icon(
+                                  onPressed: () =>
+                                      _loadOlderMessages(oldestTimestamp),
+                                  icon: const Icon(Icons.history, size: 16),
+                                  label: const Text('Cargar mensajes anteriores'),
+                                ),
+                        ),
+                      );
+                    }
+
+                    final message = allMessages[index - 1];
                     final isMe = message.userId == currentUserId;
                     final isSystem = message.tipo == 'sistema';
 

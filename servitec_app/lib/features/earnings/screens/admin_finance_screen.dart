@@ -14,6 +14,7 @@ class AdminFinanceScreen extends StatefulWidget {
 }
 
 class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
+  EarningPeriod _selectedPeriod = EarningPeriod.month;
   PlatformStats? _stats;
   bool _loading = true;
 
@@ -24,8 +25,11 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
   }
 
   Future<void> _loadStats() async {
+    setState(() => _loading = true);
     try {
-      final stats = await context.read<PaymentRepository>().getPlatformStats();
+      final stats = await context
+          .read<PaymentRepository>()
+          .getPlatformStats(period: _selectedPeriod);
       if (mounted) {
         setState(() {
           _stats = stats;
@@ -37,12 +41,18 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
     }
   }
 
+  void _onPeriodChanged(EarningPeriod? period) {
+    if (period == null || period == _selectedPeriod) return;
+    setState(() => _selectedPeriod = period);
+    _loadStats();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Finanzas')),
+      appBar: AppBar(title: const Text('Dashboard Financiero')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -53,6 +63,46 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Period selector
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusMedium),
+                        border: Border.all(color: AppTheme.dividerColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.filter_list,
+                              size: 18, color: AppTheme.textSecondary),
+                          const SizedBox(width: 8),
+                          Text('Período:',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: AppTheme.textSecondary)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<EarningPeriod>(
+                                value: _selectedPeriod,
+                                isExpanded: true,
+                                items: EarningPeriod.values
+                                    .map((p) => DropdownMenuItem(
+                                          value: p,
+                                          child: Text(p.label),
+                                        ))
+                                    .toList(),
+                                onChanged: _onPeriodChanged,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
                     // Revenue card
                     Container(
                       padding: const EdgeInsets.all(24),
@@ -60,7 +110,8 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                         gradient: const LinearGradient(
                           colors: [Color(0xFF1A1D29), Color(0xFF2D3142)],
                         ),
-                        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusLarge),
                       ),
                       child: Column(
                         children: [
@@ -81,6 +132,12 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                             style: theme.textTheme.bodySmall
                                 ?.copyWith(color: Colors.white54),
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _selectedPeriod.label,
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: Colors.white30),
+                          ),
                         ],
                       ),
                     ),
@@ -93,7 +150,8 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                         Expanded(
                           child: _MetricCard(
                             label: 'Ingresos Totales',
-                            value: '\$${_stats?.totalRevenue.toStringAsFixed(2) ?? "0.00"}',
+                            value:
+                                '\$${_stats?.totalRevenue.toStringAsFixed(2) ?? "0.00"}',
                             icon: Icons.trending_up,
                             color: AppTheme.successColor,
                           ),
@@ -102,7 +160,8 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                         Expanded(
                           child: _MetricCard(
                             label: 'Pagado a Técnicos',
-                            value: '\$${_stats?.totalPaidToTechnicians.toStringAsFixed(2) ?? "0.00"}',
+                            value:
+                                '\$${_stats?.totalPaidToTechnicians.toStringAsFixed(2) ?? "0.00"}',
                             icon: Icons.people,
                             color: AppTheme.infoColor,
                           ),
@@ -116,17 +175,18 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                       children: [
                         Expanded(
                           child: _MetricCard(
-                            label: 'Comisión Este Mes',
-                            value: '\$${_stats?.monthCommission.toStringAsFixed(2) ?? "0.00"}',
-                            icon: Icons.calendar_month,
+                            label: 'Comisión Plataforma',
+                            value:
+                                '\$${_stats?.totalCommission.toStringAsFixed(2) ?? "0.00"}',
+                            icon: Icons.account_balance,
                             color: AppTheme.warningColor,
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: _MetricCard(
-                            label: 'Tx Este Mes',
-                            value: '${_stats?.monthTransactions ?? 0}',
+                            label: 'Transacciones',
+                            value: '${_stats?.totalTransactions ?? 0}',
                             icon: Icons.receipt,
                             color: AppTheme.primaryColor,
                           ),
@@ -150,19 +210,25 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                             sections: [
                               PieChartSectionData(
                                 value: _stats!.totalCommission,
-                                title: 'Plataforma\n${(_stats!.totalCommission / _stats!.totalRevenue * 100).toStringAsFixed(1)}%',
+                                title:
+                                    'Plataforma\n${(_stats!.totalCommission / _stats!.totalRevenue * 100).toStringAsFixed(1)}%',
                                 color: AppTheme.primaryColor,
                                 radius: 60,
                                 titleStyle: const TextStyle(
-                                    fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600),
                               ),
                               PieChartSectionData(
                                 value: _stats!.totalPaidToTechnicians,
-                                title: 'Técnicos\n${(_stats!.totalPaidToTechnicians / _stats!.totalRevenue * 100).toStringAsFixed(1)}%',
+                                title:
+                                    'Técnicos\n${(_stats!.totalPaidToTechnicians / _stats!.totalRevenue * 100).toStringAsFixed(1)}%',
                                 color: AppTheme.successColor,
                                 radius: 60,
                                 titleStyle: const TextStyle(
-                                    fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600),
                               ),
                               PieChartSectionData(
                                 value: _stats!.totalRevenue -
@@ -172,17 +238,18 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                                 color: AppTheme.textTertiary,
                                 radius: 50,
                                 titleStyle: const TextStyle(
-                                    fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600),
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600),
                               ),
                             ],
                           ),
                         ),
                       ),
+                      const SizedBox(height: 24),
                     ],
 
-                    const SizedBox(height: 24),
-
-                    // Recent transactions
+                    // Recent transactions with full breakdown
                     Text('Transacciones Recientes',
                         style: theme.textTheme.titleMedium),
                     const SizedBox(height: 12),
@@ -190,7 +257,7 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                     StreamBuilder<List<TransactionModel>>(
                       stream: context
                           .read<PaymentRepository>()
-                          .getAllTransactions(),
+                          .getAllTransactionsByPeriod(_selectedPeriod),
                       builder: (context, snapshot) {
                         final transactions = snapshot.data ?? [];
 
@@ -199,9 +266,10 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                             child: Padding(
                               padding: const EdgeInsets.all(32),
                               child: Text(
-                                'No hay transacciones',
-                                style: theme.textTheme.bodyMedium
-                                    ?.copyWith(color: AppTheme.textSecondary),
+                                'No hay transacciones en este período',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: AppTheme.textSecondary),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           );
@@ -214,41 +282,80 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                               ? 20
                               : transactions.length,
                           separatorBuilder: (_, __) =>
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final tx = transactions[index];
                             return Card(
                               margin: EdgeInsets.zero,
-                              child: ListTile(
-                                dense: true,
-                                leading: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: tx.estado == 'completado'
-                                      ? AppTheme.successColor.withValues(alpha: 0.1)
-                                      : AppTheme.warningColor.withValues(alpha: 0.1),
-                                  child: Icon(
-                                    tx.estado == 'completado'
-                                        ? Icons.check
-                                        : Icons.pending,
-                                    size: 18,
-                                    color: tx.estado == 'completado'
-                                        ? AppTheme.successColor
-                                        : AppTheme.warningColor,
-                                  ),
-                                ),
-                                title: Text(
-                                  '\$${tx.montoTotal.toStringAsFixed(2)}',
-                                  style: theme.textTheme.titleSmall,
-                                ),
-                                subtitle: Text(
-                                  'Comisión: \$${tx.comisionPlataforma.toStringAsFixed(2)} | Técnico: \$${tx.montoTecnico.toStringAsFixed(2)}',
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                trailing: Text(
-                                  DateFormat('dd/MM\nHH:mm')
-                                      .format(tx.createdAt),
-                                  style: theme.textTheme.bodySmall,
-                                  textAlign: TextAlign.right,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          DateFormat('dd/MM/yyyy HH:mm')
+                                              .format(tx.createdAt),
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                  color:
+                                                      AppTheme.textSecondary),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: tx.estado == 'completado'
+                                                ? AppTheme.successColor
+                                                    .withValues(alpha: 0.1)
+                                                : AppTheme.warningColor
+                                                    .withValues(alpha: 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            tx.estado == 'completado'
+                                                ? '✅ Completada'
+                                                : '⏳ Pendiente',
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                    color: tx.estado ==
+                                                            'completado'
+                                                        ? AppTheme.successColor
+                                                        : AppTheme
+                                                            .warningColor),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const Divider(height: 16),
+                                    _TxRow(
+                                        label: 'Total Cobrado',
+                                        value:
+                                            '\$${tx.montoTotal.toStringAsFixed(2)}'),
+                                    _TxRow(
+                                      label: 'Tu Comisión (15%)',
+                                      value:
+                                          '+\$${tx.comisionPlataforma.toStringAsFixed(2)}',
+                                      color: AppTheme.successColor,
+                                    ),
+                                    _TxRow(
+                                      label: 'Stripe (2.9%+\$0.30)',
+                                      value:
+                                          '-\$${tx.comisionStripe.toStringAsFixed(2)}',
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                    _TxRow(
+                                      label: 'Pagado al Técnico',
+                                      value:
+                                          '\$${tx.montoTecnico.toStringAsFixed(2)}',
+                                      color: AppTheme.infoColor,
+                                      bold: true,
+                                    ),
+                                  ],
                                 ),
                               ),
                             );
@@ -260,6 +367,31 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class _TxRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+  final bool bold;
+
+  const _TxRow(
+      {required this.label, required this.value, this.color, this.bold = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: color,
+          fontWeight: bold ? FontWeight.w700 : FontWeight.normal,
+        );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [Text(label, style: style), Text(value, style: style)],
+      ),
     );
   }
 }

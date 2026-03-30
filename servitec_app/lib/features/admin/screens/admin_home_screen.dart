@@ -21,6 +21,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   String? _categoryFilter;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  int _displayLimit = 20;
+
+  static const int _pageSize = 20;
+
+  void _resetDisplayLimit() => setState(() => _displayLimit = _pageSize);
 
   @override
   void dispose() {
@@ -150,7 +155,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   _FilterChip(
                     label: 'Todos',
                     isSelected: _statusFilter == null,
-                    onTap: () => setState(() => _statusFilter = null),
+                    onTap: () { setState(() => _statusFilter = null); _resetDisplayLimit(); },
                   ),
                   _FilterChip(
                     label: 'Pendientes',
@@ -284,18 +289,35 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 );
               }
 
+              final displayed = services.take(_displayLimit).toList();
+              final hasMore = services.length > _displayLimit;
+
               return SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final service = services[index];
-                    return ServiceCard(
-                      service: service,
-                      showTechnician: true,
-                      onTap: () =>
-                          context.push('/service/${service.id}'),
+                    if (index < displayed.length) {
+                      final service = displayed[index];
+                      return ServiceCard(
+                        service: service,
+                        showTechnician: true,
+                        onTap: () =>
+                            context.push('/service/${service.id}'),
+                      );
+                    }
+                    // "Load More" button at end
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: () => setState(
+                            () => _displayLimit += _pageSize),
+                        icon: const Icon(Icons.expand_more),
+                        label: Text(
+                            'Cargar más (${services.length - _displayLimit} restantes)'),
+                      ),
                     );
                   },
-                  childCount: services.length,
+                  childCount: displayed.length + (hasMore ? 1 : 0),
                 ),
               );
             },

@@ -157,7 +157,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
   }
 }
 
-class _ServiceList extends StatelessWidget {
+class _ServiceList extends StatefulWidget {
   final List<ServiceModel> services;
   final String emptyMessage;
   final IconData emptyIcon;
@@ -169,16 +169,55 @@ class _ServiceList extends StatelessWidget {
   });
 
   @override
+  State<_ServiceList> createState() => _ServiceListState();
+}
+
+class _ServiceListState extends State<_ServiceList> {
+  static const int _pageSize = 15;
+  int _displayLimit = _pageSize;
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (mounted && _displayLimit < widget.services.length) {
+        setState(() => _displayLimit += _pageSize);
+      }
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ServiceList old) {
+    super.didUpdateWidget(old);
+    // Reset pagination when list changes (e.g. tab switch)
+    if (old.services != widget.services) {
+      _displayLimit = _pageSize;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (services.isEmpty) {
+    if (widget.services.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(emptyIcon, size: 64, color: AppTheme.textTertiary),
+            Icon(widget.emptyIcon, size: 64, color: AppTheme.textTertiary),
             const SizedBox(height: 16),
             Text(
-              emptyMessage,
+              widget.emptyMessage,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: AppTheme.textSecondary,
                   ),
@@ -188,14 +227,24 @@ class _ServiceList extends StatelessWidget {
       );
     }
 
+    final displayed = widget.services.take(_displayLimit).toList();
+    final hasMore = widget.services.length > _displayLimit;
+
     return ListView.builder(
+      controller: _scrollController,
       padding: const EdgeInsets.only(top: 8, bottom: 80),
-      itemCount: services.length,
+      itemCount: displayed.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        final service = services[index];
-        return ServiceCard(
-          service: service,
-          onTap: () => context.push('/service/${service.id}'),
+        if (index < displayed.length) {
+          final service = displayed[index];
+          return ServiceCard(
+            service: service,
+            onTap: () => context.push('/service/${service.id}'),
+          );
+        }
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Center(child: CircularProgressIndicator()),
         );
       },
     );

@@ -23,6 +23,12 @@ class UserModel extends Equatable {
   final int? serviciosCompletados;
   final DateTime? ultimaAsignacion;
 
+  // Stripe Connect — reserved for future direct payout integration
+  final String? stripeConnectAccountId;
+
+  // FCM token for push notifications
+  final String? fcmToken;
+
   const UserModel({
     required this.uid,
     required this.email,
@@ -42,6 +48,8 @@ class UserModel extends Equatable {
     this.horarioDisponible,
     this.serviciosCompletados,
     this.ultimaAsignacion,
+    this.stripeConnectAccountId,
+    this.fcmToken,
   });
 
   bool get isClient => rol == 'cliente';
@@ -87,6 +95,8 @@ class UserModel extends Equatable {
       serviciosCompletados: data['serviciosCompletados'] as int?,
       ultimaAsignacion:
           (data['ultimaAsignacion'] as Timestamp?)?.toDate(),
+      stripeConnectAccountId: data['stripeConnectAccountId'] as String?,
+      fcmToken: data['fcmToken'] as String?,
     );
   }
 
@@ -116,7 +126,12 @@ class UserModel extends Equatable {
       if (ultimaAsignacion != null) {
         map['ultimaAsignacion'] = Timestamp.fromDate(ultimaAsignacion!);
       }
+      if (stripeConnectAccountId != null) {
+        map['stripeConnectAccountId'] = stripeConnectAccountId;
+      }
     }
+
+    if (fcmToken != null) map['fcmToken'] = fcmToken;
 
     return map;
   }
@@ -140,6 +155,8 @@ class UserModel extends Equatable {
     Map<String, Map<String, String>>? horarioDisponible,
     int? serviciosCompletados,
     DateTime? ultimaAsignacion,
+    String? stripeConnectAccountId,
+    String? fcmToken,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -161,6 +178,9 @@ class UserModel extends Equatable {
       horarioDisponible: horarioDisponible ?? this.horarioDisponible,
       serviciosCompletados: serviciosCompletados ?? this.serviciosCompletados,
       ultimaAsignacion: ultimaAsignacion ?? this.ultimaAsignacion,
+      stripeConnectAccountId:
+          stripeConnectAccountId ?? this.stripeConnectAccountId,
+      fcmToken: fcmToken ?? this.fcmToken,
     );
   }
 
@@ -170,6 +190,6 @@ class UserModel extends Equatable {
         activo, createdAt, ubicacionDefecto, especialidades,
         calificacionPromedio, totalResenas, tarifasPorEspecialidad,
         disponible, horarioDisponible, serviciosCompletados,
-        ultimaAsignacion,
+        ultimaAsignacion, stripeConnectAccountId, fcmToken,
       ];
 }

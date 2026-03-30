@@ -33,7 +33,11 @@ class ServiceRepository {
         );
   }
 
-  // Get services by client
+  // Get services by client (paginated — 10 per page)
+  static const int _clientPageSize = 10;
+  static const int _technicianPageSize = 15;
+  static const int _adminPageSize = 20;
+
   Stream<List<ServiceModel>> getClientServices(String clientId) {
     return _servicesRef
         .where('clienteId', isEqualTo: clientId)
@@ -43,17 +47,67 @@ class ServiceRepository {
             snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList());
   }
 
-  // Get services by technician
-  Stream<List<ServiceModel>> getTechnicianServices(String technicianId) {
-    return _servicesRef
-        .where('tecnicoId', isEqualTo: technicianId)
+  /// Paginated client services — returns first page
+  Future<ServicePage> getClientServicesPage(
+      String clientId, {
+      DocumentSnapshot? lastDocument,
+    }) async {
+    Query query = _servicesRef
+        .where('clienteId', isEqualTo: clientId)
         .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList());
+        .limit(_clientPageSize);
+
+    if (lastDocument != null) {
+      query = query.startAfterDocument(lastDocument);
+    }
+
+    final snap = await query.get();
+    return ServicePage(
+      services: snap.docs.map((d) => ServiceModel.fromFirestore(d)).toList(),
+      lastDocument: snap.docs.isNotEmpty ? snap.docs.last : null,
+      hasMore: snap.docs.length == _clientPageSize,
+    );
   }
 
-  // Get all services (admin)
+  // Get services by technician (paginated — 15 per page)
+  Stream<List<ServiceModel>> getTechnicianServices(String technicianId,
+      {String? statusFilter}) {
+    Query query = _servicesRef
+        .where('tecnicoId', isEqualTo: technicianId)
+        .orderBy('createdAt', descending: true);
+    if (statusFilter != null) {
+      query = query.where('estado', isEqualTo: statusFilter);
+    }
+    return query.snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList());
+  }
+
+  Future<ServicePage> getTechnicianServicesPage(
+      String technicianId, {
+      String? statusFilter,
+      DocumentSnapshot? lastDocument,
+    }) async {
+    Query query = _servicesRef
+        .where('tecnicoId', isEqualTo: technicianId)
+        .orderBy('createdAt', descending: true)
+        .limit(_technicianPageSize);
+
+    if (statusFilter != null) {
+      query = query.where('estado', isEqualTo: statusFilter);
+    }
+    if (lastDocument != null) {
+      query = query.startAfterDocument(lastDocument);
+    }
+
+    final snap = await query.get();
+    return ServicePage(
+      services: snap.docs.map((d) => ServiceModel.fromFirestore(d)).toList(),
+      lastDocument: snap.docs.isNotEmpty ? snap.docs.last : null,
+      hasMore: snap.docs.length == _technicianPageSize,
+    );
+  }
+
+  // Get all services (admin — paginated 20 per page)
   Stream<List<ServiceModel>> getAllServices({String? statusFilter}) {
     Query query = _servicesRef.orderBy('createdAt', descending: true);
     if (statusFilter != null) {
@@ -61,6 +115,33 @@ class ServiceRepository {
     }
     return query.snapshots().map((snapshot) =>
         snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList());
+  }
+
+  Future<ServicePage> getAllServicesPage({
+    String? statusFilter,
+    String? categoryFilter,
+    DocumentSnapshot? lastDocument,
+  }) async {
+    Query query = _servicesRef
+        .orderBy('createdAt', descending: true)
+        .limit(_adminPageSize);
+
+    if (statusFilter != null) {
+      query = query.where('estado', isEqualTo: statusFilter);
+    }
+    if (categoryFilter != null) {
+      query = query.where('categoria', isEqualTo: categoryFilter);
+    }
+    if (lastDocument != null) {
+      query = query.startAfterDocument(lastDocument);
+    }
+
+    final snap = await query.get();
+    return ServicePage(
+      services: snap.docs.map((d) => ServiceModel.fromFirestore(d)).toList(),
+      lastDocument: snap.docs.isNotEmpty ? snap.docs.last : null,
+      hasMore: snap.docs.length == _adminPageSize,
+    );
   }
 
   // Get pending services (admin)
@@ -128,15 +209,38 @@ class ServiceRepository {
         .add(message.toFirestore());
   }
 
-  // Stream messages
+  static const int _initialMessageLimit = 50;
+
+  // Stream messages — initial 50, most recent
   Stream<List<MessageModel>> getMessages(String serviceId) {
     return _servicesRef
         .doc(serviceId)
         .collection(AppConstants.messagesSubcollection)
         .orderBy('timestamp', descending: false)
+        .limitToLast(_initialMessageLimit)
         .snapshots()
         .map((snapshot) =>
             snapshot.docs.map((doc) => MessageModel.fromFirestore(doc)).toList());
+  }
+
+  /// Load older messages before a given timestamp (lazy loading)
+  Future<List<MessageModel>> getMessagesBefore(
+      String serviceId, DateTime before) async {
+    const olderPageSize = 30;
+    final snap = await _servicesRef
+        .doc(serviceId)
+        .collection(AppConstants.messagesSubcollection)
+        .orderBy('timestamp', descending: true)
+        .where('timestamp',
+            isLessThan: Timestamp.fromDate(before))
+        .limit(olderPageSize)
+        .get();
+    // Reverse to maintain chronological order
+    return snap.docs
+        .map((d) => MessageModel.fromFirestore(d))
+        .toList()
+        .reversed
+        .toList();
   }
 
   // Mark message as read
@@ -158,4 +262,17 @@ class ServiceRepository {
         .snapshots()
         .map((snapshot) => snapshot.docs.length);
   }
+}
+
+/// Pagination result wrapper
+class ServicePage {
+  final List<ServiceModel> services;
+  final DocumentSnapshot? lastDocument;
+  final bool hasMore;
+
+  const ServicePage({
+    required this.services,
+    required this.lastDocument,
+    required this.hasMore,
+  });
 }

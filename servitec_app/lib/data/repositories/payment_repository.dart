@@ -93,12 +93,38 @@ class PaymentRepository {
         snap.docs.map((d) => TransactionModel.fromFirestore(d)).toList());
   }
 
-  /// Get earning stats for a technician
-  Future<EarningStats> getTechnicianEarnings(String technicianId) async {
-    final snap = await _transactionsRef
+  /// Get transactions for a technician filtered by period
+  Stream<List<TransactionModel>> getTechnicianTransactionsByPeriod(
+      String technicianId, EarningPeriod period) {
+    Query query = _transactionsRef
         .where('tecnicoId', isEqualTo: technicianId)
         .where('estado', isEqualTo: 'completado')
-        .get();
+        .orderBy('createdAt', descending: true);
+
+    final from = _periodStart(period);
+    if (from != null) {
+      query = query.where('createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+
+    return query.snapshots().map(
+        (snap) => snap.docs.map((d) => TransactionModel.fromFirestore(d)).toList());
+  }
+
+  /// Get earning stats for a technician filtered by period
+  Future<EarningStats> getTechnicianEarnings(String technicianId,
+      {EarningPeriod period = EarningPeriod.all}) async {
+    Query query = _transactionsRef
+        .where('tecnicoId', isEqualTo: technicianId)
+        .where('estado', isEqualTo: 'completado');
+
+    final from = _periodStart(period);
+    if (from != null) {
+      query = query.where('createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+
+    final snap = await query.get();
 
     double totalEarned = 0;
     double totalCommission = 0;
@@ -111,7 +137,7 @@ class PaymentRepository {
           (data['comisionPlataforma'] as num?)?.toDouble() ?? 0;
     }
 
-    // This month
+    // This month (always shown separately for reference)
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
     final monthSnap = await _transactionsRef
@@ -136,11 +162,36 @@ class PaymentRepository {
     );
   }
 
-  /// Get platform revenue stats (admin)
-  Future<PlatformStats> getPlatformStats() async {
-    final snap = await _transactionsRef
+  /// Get all transactions (admin) filtered by period
+  Stream<List<TransactionModel>> getAllTransactionsByPeriod(
+      EarningPeriod period) {
+    Query query = _transactionsRef
         .where('estado', isEqualTo: 'completado')
-        .get();
+        .orderBy('createdAt', descending: true);
+
+    final from = _periodStart(period);
+    if (from != null) {
+      query = query.where('createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+
+    return query.snapshots().map(
+        (snap) => snap.docs.map((d) => TransactionModel.fromFirestore(d)).toList());
+  }
+
+  /// Get platform revenue stats (admin) filtered by period
+  Future<PlatformStats> getPlatformStats(
+      {EarningPeriod period = EarningPeriod.all}) async {
+    Query query =
+        _transactionsRef.where('estado', isEqualTo: 'completado');
+
+    final from = _periodStart(period);
+    if (from != null) {
+      query = query.where('createdAt',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(from));
+    }
+
+    final snap = await query.get();
 
     double totalRevenue = 0;
     double totalCommission = 0;
@@ -180,6 +231,23 @@ class PaymentRepository {
       monthCommission: monthCommission,
       monthTransactions: monthSnap.docs.length,
     );
+  }
+
+  /// Returns the start DateTime for a given period (null = all time)
+  DateTime? _periodStart(EarningPeriod period) {
+    final now = DateTime.now();
+    switch (period) {
+      case EarningPeriod.week:
+        // Monday of the current week
+        final monday = now.subtract(Duration(days: now.weekday - 1));
+        return DateTime(monday.year, monday.month, monday.day);
+      case EarningPeriod.month:
+        return DateTime(now.year, now.month, 1);
+      case EarningPeriod.year:
+        return DateTime(now.year, 1, 1);
+      case EarningPeriod.all:
+        return null;
+    }
   }
 
   /// Update service to payment pending after completion
@@ -237,6 +305,23 @@ class PaymentRepository {
     });
 
     await batch.commit();
+  }
+}
+
+enum EarningPeriod { week, month, year, all }
+
+extension EarningPeriodLabel on EarningPeriod {
+  String get label {
+    switch (this) {
+      case EarningPeriod.week:
+        return 'Esta Semana';
+      case EarningPeriod.month:
+        return 'Este Mes';
+      case EarningPeriod.year:
+        return 'Este Año';
+      case EarningPeriod.all:
+        return 'Todo';
+    }
   }
 }
 

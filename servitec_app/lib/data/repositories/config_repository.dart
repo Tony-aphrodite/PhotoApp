@@ -34,8 +34,25 @@ class ConfigRepository {
   ConfigRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;
 
-  // Get all tariffs
+  // ── In-memory cache ──────────────────────────────────────────────────────
+  Map<String, TarifaInfo>? _tarifasCache;
+  DateTime? _tarifasCachedAt;
+  static const _tarifasCacheTtl = Duration(hours: 24);
+
+  Map<String, double>? _comisionCache;
+  DateTime? _comisionCachedAt;
+  static const _comisionCacheTtl = Duration(hours: 1);
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Get all tariffs — cached for 24 hours
   Future<Map<String, TarifaInfo>> getTarifas() async {
+    final now = DateTime.now();
+    if (_tarifasCache != null &&
+        _tarifasCachedAt != null &&
+        now.difference(_tarifasCachedAt!) < _tarifasCacheTtl) {
+      return _tarifasCache!;
+    }
+
     final doc = await _firestore
         .collection(AppConstants.configCollection)
         .doc('tarifas')
@@ -55,10 +72,18 @@ class ConfigRepository {
       }
     }
 
+    _tarifasCache = tarifas;
+    _tarifasCachedAt = now;
     return tarifas;
   }
 
-  // Stream tariffs for real-time updates
+  /// Invalidate tariff cache (call after admin updates a tariff)
+  void invalidateTarifasCache() {
+    _tarifasCache = null;
+    _tarifasCachedAt = null;
+  }
+
+  // Stream tariffs for real-time updates (bypasses cache — used in admin screens)
   Stream<Map<String, TarifaInfo>> streamTarifas() {
     return _firestore
         .collection(AppConstants.configCollection)
@@ -78,6 +103,10 @@ class ConfigRepository {
           );
         }
       }
+
+      // Keep cache in sync with stream updates
+      _tarifasCache = tarifas;
+      _tarifasCachedAt = DateTime.now();
 
       return tarifas;
     });
@@ -101,35 +130,64 @@ class ConfigRepository {
     return (tarifaBase * multiplicador) + recargoDistancia;
   }
 
-  // Get commission config
+  /// Get commission config — cached for 1 hour
   Future<Map<String, double>> getComisionConfig() async {
+    final now = DateTime.now();
+    if (_comisionCache != null &&
+        _comisionCachedAt != null &&
+        now.difference(_comisionCachedAt!) < _comisionCacheTtl) {
+      return _comisionCache!;
+    }
+
     final doc = await _firestore
         .collection(AppConstants.configCollection)
         .doc('comisiones')
         .get();
 
+    Map<String, double> result;
+
     if (!doc.exists) {
-      return {
+      result = {
         'porcentajePlataforma': 15.0,
         'porcentajeStripe': 2.9,
       };
+    } else {
+      final data = doc.data() ?? {};
+      result = {
+        'porcentajePlataforma':
+            (data['porcentajePlataforma'] as num?)?.toDouble() ?? 15.0,
+        'porcentajeStripe':
+            (data['porcentajeStripe'] as num?)?.toDouble() ?? 2.9,
+      };
     }
 
-    final data = doc.data() ?? {};
-    return {
-      'porcentajePlataforma':
-          (data['porcentajePlataforma'] as num?)?.toDouble() ?? 15.0,
-      'porcentajeStripe':
-          (data['porcentajeStripe'] as num?)?.toDouble() ?? 2.9,
-    };
+    _comisionCache = result;
+    _comisionCachedAt = now;
+    return result;
   }
 
-  // Update tariff (admin)
+  /// Invalidate commission cache (call after admin updates commission rate)
+  void invalidateComisionCache() {
+    _comisionCache = null;
+    _comisionCachedAt = null;
+  }
+
+  // Update tariff (admin) — also invalidates cache
   Future<void> updateTarifa(
       String categoria, Map<String, dynamic> data) async {
     await _firestore
         .collection(AppConstants.configCollection)
         .doc('tarifas')
         .update({categoria: data});
+    invalidateTarifasCache();
+  }
+
+  // Update commission rate (admin) — also invalidates cache
+  Future<void> updateComision(double porcentajePlataforma) async {
+    await _firestore
+        .collection(AppConstants.configCollection)
+        .doc('comisiones')
+        .set({'porcentajePlataforma': porcentajePlataforma}, SetOptions(merge: true));
+    invalidateComisionCache();
   }
 }
