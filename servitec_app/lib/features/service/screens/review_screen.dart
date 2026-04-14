@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/review_model.dart';
@@ -19,15 +20,21 @@ class ReviewScreen extends StatefulWidget {
   State<ReviewScreen> createState() => _ReviewScreenState();
 }
 
-class _ReviewScreenState extends State<ReviewScreen> {
+class _ReviewScreenState extends State<ReviewScreen>
+    with SingleTickerProviderStateMixin {
   int _rating = 5;
   final _commentController = TextEditingController();
   bool _submitting = false;
   ServiceModel? _service;
+  late AnimationController _starAnimController;
 
   @override
   void initState() {
     super.initState();
+    _starAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
     _loadService();
   }
 
@@ -40,6 +47,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   @override
   void dispose() {
     _commentController.dispose();
+    _starAnimController.dispose();
     super.dispose();
   }
 
@@ -88,7 +96,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Reseña enviada. ¡Gracias!'),
+            content: Text('Resena enviada. Gracias!'),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -97,7 +105,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppTheme.errorColor),
+          SnackBar(
+              content: Text('Error: $e'),
+              backgroundColor: AppTheme.errorColor),
         );
       }
     } finally {
@@ -107,92 +117,346 @@ class _ReviewScreenState extends State<ReviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Calificar Servicio')),
+      backgroundColor: AppTheme.backgroundLight,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          'Calificar Servicio',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textPrimary,
+            letterSpacing: -0.5,
+          ),
+        ),
+      ),
       body: _service == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppTheme.primaryColor))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Service info
-                  Text(_service!.titulo, style: theme.textTheme.titleLarge),
-                  if (_service!.tecnicoNombre != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'Técnico: ${_service!.tecnicoNombre}',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: AppTheme.textSecondary),
+                  // Service info card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusLarge),
+                      boxShadow: AppTheme.softShadow,
                     ),
-                  ],
-
-                  const SizedBox(height: 32),
-
-                  // Star rating
-                  Text('¿Cómo calificarías el servicio?',
-                      style: theme.textTheme.titleMedium,
-                      textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(5, (index) {
-                      return GestureDetector(
-                        onTap: () => setState(() => _rating = index + 1),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Icon(
-                            index < _rating ? Icons.star : Icons.star_border,
-                            size: 48,
-                            color: Colors.amber,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(Icons.build_outlined,
+                              color: Colors.white, size: 22),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _service!.titulo,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              if (_service!.tecnicoNombre != null) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Tecnico: ${_service!.tecnicoNombre}',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _ratingLabel(_rating),
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Comment
-                  TextField(
-                    controller: _commentController,
-                    maxLines: 4,
-                    maxLength: 500,
-                    decoration: const InputDecoration(
-                      labelText: 'Comentario (opcional)',
-                      hintText: 'Cuéntanos sobre tu experiencia...',
-                      alignLabelWithHint: true,
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: 24),
 
-                  ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Icons.send),
-                    label: const Text('Enviar Reseña'),
+                  // Star rating card
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 32, horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusLarge),
+                      boxShadow: AppTheme.softShadow,
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Como calificarias el servicio?',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                            letterSpacing: -0.3,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(5, (index) {
+                            final isSelected = index < _rating;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() => _rating = index + 1);
+                                _starAnimController.reset();
+                                _starAnimController.forward();
+                              },
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(
+                                  begin: 1.0,
+                                  end: isSelected ? 1.0 : 0.8,
+                                ),
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutBack,
+                                builder: (context, scale, child) {
+                                  return Transform.scale(
+                                    scale: scale,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6),
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 200),
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: isSelected
+                                              ? const Color(0xFFFFF8E1)
+                                              : AppTheme.backgroundLight,
+                                          shape: BoxShape.circle,
+                                          boxShadow: isSelected
+                                              ? [
+                                                  BoxShadow(
+                                                    color: Colors.amber
+                                                        .withValues(
+                                                            alpha: 0.3),
+                                                    blurRadius: 12,
+                                                    offset:
+                                                        const Offset(0, 3),
+                                                  ),
+                                                ]
+                                              : [],
+                                        ),
+                                        child: Icon(
+                                          isSelected
+                                              ? Icons.star_rounded
+                                              : Icons.star_outline_rounded,
+                                          size: 40,
+                                          color: isSelected
+                                              ? Colors.amber
+                                              : AppTheme.textTertiary,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          }),
+                        ),
+                        const SizedBox(height: 16),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          child: Container(
+                            key: ValueKey(_rating),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
+                            decoration: BoxDecoration(
+                              color:
+                                  _ratingColor(_rating).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _ratingLabel(_rating),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: _ratingColor(_rating),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+
+                  const SizedBox(height: 20),
+
+                  // Comment card
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusLarge),
+                      boxShadow: AppTheme.softShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Comentario (opcional)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _commentController,
+                          maxLines: 4,
+                          maxLength: 500,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
+                            color: AppTheme.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Cuentanos sobre tu experiencia...',
+                            hintStyle: GoogleFonts.plusJakartaSans(
+                              color: AppTheme.textTertiary,
+                              fontSize: 15,
+                            ),
+                            filled: true,
+                            fillColor: AppTheme.backgroundLight,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMedium),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMedium),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusMedium),
+                              borderSide: const BorderSide(
+                                  color: AppTheme.primaryColor, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.all(16),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // Submit button
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusMedium),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF14BDAC)
+                              .withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _submitting ? null : _submit,
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusMedium),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_submitting)
+                                const SizedBox(
+                                  height: 22,
+                                  width: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              else
+                                const Icon(Icons.send_rounded,
+                                    color: Colors.white, size: 22),
+                              const SizedBox(width: 10),
+                              Text(
+                                _submitting
+                                    ? 'Enviando...'
+                                    : 'Enviar Resena',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: Colors.white,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
     );
+  }
+
+  Color _ratingColor(int rating) {
+    switch (rating) {
+      case 1:
+        return AppTheme.errorColor;
+      case 2:
+        return AppTheme.accentColor;
+      case 3:
+        return AppTheme.warningColor;
+      case 4:
+        return AppTheme.primaryColor;
+      case 5:
+        return AppTheme.successColor;
+      default:
+        return AppTheme.textTertiary;
+    }
   }
 
   String _ratingLabel(int rating) {

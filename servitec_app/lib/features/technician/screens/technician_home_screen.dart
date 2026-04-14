@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/service_card.dart';
@@ -34,74 +35,164 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final authState = context.watch<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return const SizedBox();
     final user = authState.user;
 
     return Scaffold(
+      backgroundColor: AppTheme.backgroundLight,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 160,
+              expandedHeight: 210,
               floating: true,
               pinned: true,
-              bottom: TabBar(
-                controller: _tabController,
-                labelColor: AppTheme.primaryColor,
-                unselectedLabelColor: AppTheme.textTertiary,
-                indicatorColor: AppTheme.primaryColor,
-                tabs: const [
-                  Tab(text: 'Asignados'),
-                  Tab(text: 'En Progreso'),
-                  Tab(text: 'Completados'),
-                ],
+              backgroundColor: const Color(0xFF0A2E36),
+              surfaceTintColor: Colors.transparent,
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(52),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: TabBar(
+                    controller: _tabController,
+                    labelColor: AppTheme.primaryColor,
+                    unselectedLabelColor: AppTheme.textTertiary,
+                    labelStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                    unselectedLabelStyle: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    indicator: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    dividerColor: Colors.transparent,
+                    splashBorderRadius: BorderRadius.circular(12),
+                    padding: const EdgeInsets.all(4),
+                    tabs: const [
+                      Tab(text: 'Asignados'),
+                      Tab(text: 'En Progreso'),
+                      Tab(text: 'Completados'),
+                    ],
+                  ),
+                ),
               ),
               flexibleSpace: FlexibleSpaceBar(
                 background: Container(
-                  padding: const EdgeInsets.fromLTRB(24, 70, 24, 60),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        AppTheme.primaryColor,
-                        AppTheme.secondaryColor,
+                        Color(0xFF0A2E36),
+                        Color(0xFF0D5C61),
+                        Color(0xFF14BDAC),
                       ],
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Hola, ${user.nombre}',
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 16, 24, 70),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.star, color: Colors.amber, size: 18),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${user.calificacionPromedio?.toStringAsFixed(1) ?? '0.0'} (${user.totalResenas ?? 0} reseñas)',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
-                            ),
+                          Row(
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    (user.nombre.isNotEmpty
+                                            ? user.nombre[0]
+                                            : 'T')
+                                        .toUpperCase(),
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Hola, ${user.nombre}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Panel de Tecnico',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w400,
+                                        color: Colors.white.withValues(alpha: 0.6),
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 16),
-                          Text(
-                            '${user.serviciosCompletados ?? 0} servicios',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
-                            ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              _HeaderStatChip(
+                                icon: Icons.star_rounded,
+                                iconColor: const Color(0xFFFFD54F),
+                                label:
+                                    '${user.calificacionPromedio?.toStringAsFixed(1) ?? '0.0'}',
+                                sublabel:
+                                    '(${user.totalResenas ?? 0} resenas)',
+                              ),
+                              const SizedBox(width: 12),
+                              _HeaderStatChip(
+                                icon: Icons.check_circle_rounded,
+                                iconColor: const Color(0xFF69F0AE),
+                                label:
+                                    '${user.serviciosCompletados ?? 0}',
+                                sublabel: 'completados',
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -114,7 +205,12 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
               .getTechnicianServices(user.uid),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(
+                child: CircularProgressIndicator(
+                  color: AppTheme.primaryColor,
+                  strokeWidth: 2.5,
+                ),
+              );
             }
 
             final allServices = snapshot.data ?? [];
@@ -136,16 +232,22 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
                 _ServiceList(
                   services: assigned,
                   emptyMessage: 'No tienes servicios asignados',
+                  emptySubMessage:
+                      'Los nuevos servicios apareceran aqui cuando te sean asignados',
                   emptyIcon: Icons.assignment_outlined,
                 ),
                 _ServiceList(
                   services: inProgress,
                   emptyMessage: 'No tienes servicios en progreso',
+                  emptySubMessage:
+                      'Acepta un servicio asignado para comenzar a trabajar',
                   emptyIcon: Icons.engineering_outlined,
                 ),
                 _ServiceList(
                   services: completed,
-                  emptyMessage: 'Aún no has completado servicios',
+                  emptyMessage: 'Aun no has completado servicios',
+                  emptySubMessage:
+                      'Tu historial de servicios completados aparecera aqui',
                   emptyIcon: Icons.check_circle_outline,
                 ),
               ],
@@ -157,14 +259,69 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
   }
 }
 
+class _HeaderStatChip extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String label;
+  final String sublabel;
+
+  const _HeaderStatChip({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.sublabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: iconColor),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            sublabel,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ServiceList extends StatefulWidget {
   final List<ServiceModel> services;
   final String emptyMessage;
+  final String emptySubMessage;
   final IconData emptyIcon;
 
   const _ServiceList({
     required this.services,
     required this.emptyMessage,
+    required this.emptySubMessage,
     required this.emptyIcon,
   });
 
@@ -211,18 +368,48 @@ class _ServiceListState extends State<_ServiceList> {
   Widget build(BuildContext context) {
     if (widget.services.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(widget.emptyIcon, size: 64, color: AppTheme.textTertiary),
-            const SizedBox(height: 16),
-            Text(
-              widget.emptyMessage,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppTheme.textSecondary,
-                  ),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  widget.emptyIcon,
+                  size: 38,
+                  color: AppTheme.primaryColor.withValues(alpha: 0.35),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                widget.emptyMessage,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                  letterSpacing: -0.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                widget.emptySubMessage,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: AppTheme.textTertiary,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -232,19 +419,42 @@ class _ServiceListState extends State<_ServiceList> {
 
     return ListView.builder(
       controller: _scrollController,
-      padding: const EdgeInsets.only(top: 8, bottom: 80),
+      padding: const EdgeInsets.only(top: 16, bottom: 80),
       itemCount: displayed.length + (hasMore ? 1 : 0),
       itemBuilder: (context, index) {
         if (index < displayed.length) {
           final service = displayed[index];
-          return ServiceCard(
-            service: service,
-            onTap: () => context.push('/service/${service.id}'),
+          return TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: Duration(milliseconds: 350 + (index * 60)),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, 20 * (1 - value)),
+                  child: child,
+                ),
+              );
+            },
+            child: ServiceCard(
+              service: service,
+              onTap: () => context.push('/service/${service.id}'),
+            ),
           );
         }
-        return const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: Center(child: CircularProgressIndicator()),
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: AppTheme.primaryColor,
+              ),
+            ),
+          ),
         );
       },
     );
