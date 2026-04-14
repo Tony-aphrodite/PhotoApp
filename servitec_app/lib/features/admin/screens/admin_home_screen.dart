@@ -160,29 +160,25 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   _FilterChip(
                     label: 'Pendientes',
                     isSelected: _statusFilter == AppConstants.statusPending,
-                    onTap: () => setState(
-                        () => _statusFilter = AppConstants.statusPending),
+                    onTap: () { setState(() => _statusFilter = AppConstants.statusPending); _resetDisplayLimit(); },
                     color: AppTheme.warningColor,
                   ),
                   _FilterChip(
                     label: 'Asignados',
                     isSelected: _statusFilter == AppConstants.statusAssigned,
-                    onTap: () => setState(
-                        () => _statusFilter = AppConstants.statusAssigned),
+                    onTap: () { setState(() => _statusFilter = AppConstants.statusAssigned); _resetDisplayLimit(); },
                     color: AppTheme.infoColor,
                   ),
                   _FilterChip(
                     label: 'En Progreso',
                     isSelected: _statusFilter == AppConstants.statusInProgress,
-                    onTap: () => setState(
-                        () => _statusFilter = AppConstants.statusInProgress),
+                    onTap: () { setState(() => _statusFilter = AppConstants.statusInProgress); _resetDisplayLimit(); },
                     color: const Color(0xFF8E44AD),
                   ),
                   _FilterChip(
                     label: 'Completados',
                     isSelected: _statusFilter == AppConstants.statusCompleted,
-                    onTap: () => setState(
-                        () => _statusFilter = AppConstants.statusCompleted),
+                    onTap: () { setState(() => _statusFilter = AppConstants.statusCompleted); _resetDisplayLimit(); },
                     color: AppTheme.successColor,
                   ),
                 ],
@@ -210,7 +206,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       : null,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 ),
-                onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                onChanged: (v) { setState(() => _searchQuery = v.toLowerCase()); _resetDisplayLimit(); },
               ),
             ),
           ),
@@ -225,7 +221,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   _FilterChip(
                     label: 'Todas categorías',
                     isSelected: _categoryFilter == null,
-                    onTap: () => setState(() => _categoryFilter = null),
+                    onTap: () { setState(() => _categoryFilter = null); _resetDisplayLimit(); },
                   ),
                   ...AppConstants.serviceCategories.map((cat) {
                     final emoji = AppConstants.categoryIcons[cat] ?? '';
@@ -233,7 +229,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     return _FilterChip(
                       label: '$emoji $label',
                       isSelected: _categoryFilter == cat,
-                      onTap: () => setState(() => _categoryFilter = cat),
+                      onTap: () { setState(() => _categoryFilter = cat); _resetDisplayLimit(); },
                     );
                   }),
                 ],

@@ -42,11 +42,11 @@ service cloud.firestore {
       allow create: if isAuthenticated();
 
       // Actualización: propio perfil o admin
-      // No se permite cambiar el rol
-      // Técnicos pueden actualizar sus campos de perfil (disponibilidad, tarifas, etc.)
+      // No se permite cambiar el rol ni campos calculados por Cloud Functions
       allow update: if isAuthenticated() && (
         request.auth.uid == userId || isAdmin()
-      ) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['rol']);
+      ) && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['rol', 'calificacionPromedio', 'totalResenas', 'serviciosCompletados']);
 
       allow delete: if isAdmin();
     }

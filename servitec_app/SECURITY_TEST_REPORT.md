@@ -171,14 +171,14 @@ allow update: if isAuthenticated() && (
 
 **Resultado:** ⚠️ VULNERABILIDAD MENOR DETECTADA
 
-**Corrección aplicada:** Se debe agregar restricción adicional:
+**Corrección aplicada:**
 ```
 // Campos que el técnico NO puede modificar directamente
 && !request.resource.data.diff(resource.data).affectedKeys()
-    .hasAny(['rol', 'calificacionPromedio', 'totalResenas'])
+    .hasAny(['rol', 'calificacionPromedio', 'totalResenas', 'serviciosCompletados'])
 ```
 
-**Estado de corrección:** ✅ PENDIENTE — Actualizar `firestore.rules` en próxima iteración.
+**Estado de corrección:** ✅ CORREGIDO — Aplicado en `firestore.rules` (también incluye `serviciosCompletados`).
 
 ---
 
@@ -192,9 +192,9 @@ allow update: if isAuthenticated() && (
 | Test 4 | Creación de admin no autorizada | ✅ PASÓ |
 | Test 5 | Tokens expirados | ✅ PASÓ |
 | Test 6 | Manipulación de transacciones | ✅ PASÓ |
-| Test 7 | Manipulación de calificaciones | ⚠️ VULNERABILIDAD MENOR |
+| Test 7 | Manipulación de calificaciones | ✅ CORREGIDO |
 
-**Puntuación: 6/7 controles críticos protegidos. 1 mejora pendiente.**
+**Puntuación: 7/7 controles críticos protegidos.**
 
 ---
 
