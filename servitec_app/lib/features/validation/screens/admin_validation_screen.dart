@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/service_card.dart';
 import '../../../data/models/user_model.dart';
 
 class AdminValidationScreen extends StatelessWidget {
@@ -385,38 +386,11 @@ class _ValidationCardState extends State<_ValidationCard> {
                                       child: ClipRRect(
                                         borderRadius:
                                             BorderRadius.circular(12),
-                                        child: CachedNetworkImage(
-                                          imageUrl: url.toString(),
+                                        child: SizedBox(
                                           width: 90,
                                           height: 90,
-                                          fit: BoxFit.cover,
-                                          placeholder: (_, __) =>
-                                              Container(
-                                            width: 90,
-                                            height: 90,
-                                            color: const Color(
-                                                0xFFF5F7FA),
-                                            child: const Center(
-                                              child:
-                                                  CircularProgressIndicator(
-                                                color: AppTheme
-                                                    .primaryColor,
-                                                strokeWidth: 2,
-                                              ),
-                                            ),
-                                          ),
-                                          errorWidget:
-                                              (_, __, ___) =>
-                                                  Container(
-                                            width: 90,
-                                            height: 90,
-                                            color: const Color(
-                                                0xFFF5F7FA),
-                                            child: const Icon(
-                                                Icons
-                                                    .broken_image_outlined,
-                                                color: AppTheme
-                                                    .textTertiary),
+                                          child: ServiceCard.buildImage(
+                                            url.toString(),
                                           ),
                                         ),
                                       ),
