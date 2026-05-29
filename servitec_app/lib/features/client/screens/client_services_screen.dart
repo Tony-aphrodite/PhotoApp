@@ -117,11 +117,46 @@ class _ClientServicesScreenState extends State<ClientServicesScreen>
           stream:
               context.read<ServiceRepository>().getClientServices(user.uid),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
               return const Center(
                 child: CircularProgressIndicator(
                   color: AppTheme.primaryColor,
                   strokeWidth: 3,
+                ),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.error_outline_rounded,
+                          size: 48,
+                          color: AppTheme.errorColor.withValues(alpha: 0.6)),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Error al cargar servicios',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '${snapshot.error}',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          color: AppTheme.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               );
             }
