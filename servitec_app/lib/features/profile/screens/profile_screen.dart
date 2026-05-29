@@ -1,14 +1,143 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/repositories/storage_repository.dart';
+import '../../../data/repositories/user_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_event.dart';
 import '../../auth/bloc/auth_state.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _picker = ImagePicker();
+  bool _uploading = false;
+
+  ImageProvider? _getImageProvider(String url) {
+    if (url.startsWith('data:')) {
+      try {
+        final base64Str = url.split(',').last;
+        return MemoryImage(base64Decode(base64Str));
+      } catch (_) {
+        return null;
+      }
+    }
+    return CachedNetworkImageProvider(url);
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.dividerColor,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Cambiar foto de perfil',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded,
+                      color: AppTheme.primaryColor),
+                ),
+                title: Text('Camara',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.secondaryColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.photo_library_rounded,
+                      color: AppTheme.secondaryColor),
+                ),
+                title: Text('Galeria',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+    if (picked == null) return;
+
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+
+    setState(() => _uploading = true);
+
+    try {
+      final storageRepo = context.read<StorageRepository>();
+      final userRepo = context.read<UserRepository>();
+      final url =
+          await storageRepo.uploadProfilePhoto(authState.user.uid, File(picked.path));
+      await userRepo.updateUser(authState.user.uid, {'fotoPerfil': url});
+      // Refresh auth state
+      context.read<AuthBloc>().add(AuthCheckRequested());
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir foto: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,37 +185,87 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 28),
 
-                      // Avatar with border
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 20,
-                              offset: const Offset(0, 8),
+                      // Avatar with photo upload
+                      GestureDetector(
+                        onTap: _uploading ? null : _pickAndUploadPhoto,
+                        child: Stack(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                  width: 3,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: CircleAvatar(
+                                radius: 48,
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.15),
+                                backgroundImage: user.fotoPerfil != null
+                                    ? _getImageProvider(user.fotoPerfil!)
+                                    : null,
+                                child: _uploading
+                                    ? const SizedBox(
+                                        width: 32,
+                                        height: 32,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 3,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : user.fotoPerfil == null
+                                        ? Text(
+                                            user.nombre.isNotEmpty
+                                                ? user.nombre[0].toUpperCase()
+                                                : '?',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 36,
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : null,
+                              ),
+                            ),
+                            // Camera icon overlay
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.secondaryColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFF0A2E36),
+                                    width: 2.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.black.withValues(alpha: 0.15),
+                                      blurRadius: 6,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                ),
+                              ),
                             ),
                           ],
-                        ),
-                        child: CircleAvatar(
-                          radius: 48,
-                          backgroundColor:
-                              Colors.white.withValues(alpha: 0.15),
-                          child: Text(
-                            user.nombre.isNotEmpty
-                                ? user.nombre[0].toUpperCase()
-                                : '?',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                            ),
-                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
