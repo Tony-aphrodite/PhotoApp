@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../data/repositories/payment_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
@@ -120,7 +121,10 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '\$${_stats?.totalEarned.toStringAsFixed(2) ?? "0.00"}',
+                                  _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalEarned)
+                                      : '\$0.00 MXN',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 40,
                                     fontWeight: FontWeight.w800,
@@ -237,8 +241,10 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
                               Expanded(
                                 child: _PremiumStatCard(
                                   label: 'Neto Recibido',
-                                  value:
-                                      '\$${_stats?.totalEarned.toStringAsFixed(2) ?? "0.00"}',
+                                  value: _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalEarned)
+                                      : '\$0.00 MXN',
                                   icon: Icons.account_balance_wallet_rounded,
                                   gradientColors: const [
                                     Color(0xFF00C853),
@@ -268,8 +274,10 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
                               Expanded(
                                 child: _PremiumStatCard(
                                   label: 'Comision',
-                                  value:
-                                      '\$${_stats?.totalCommission.toStringAsFixed(2) ?? "0.00"}',
+                                  value: _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalCommission)
+                                      : '\$0.00 MXN',
                                   icon: Icons.receipt_long_rounded,
                                   gradientColors: const [
                                     Color(0xFFFFAB00),
@@ -566,19 +574,19 @@ class _TransactionCard extends StatelessWidget {
           const SizedBox(height: 14),
           _FinancialRow(
             label: 'Monto Total',
-            value: '\$${tx.montoTotal.toStringAsFixed(2)}',
+            value: CurrencyFormatter.compact(tx.montoTotal),
             color: AppTheme.textPrimary,
           ),
           const SizedBox(height: 6),
           _FinancialRow(
             label: 'Comision Plataforma',
-            value: '- \$${tx.comisionPlataforma.toStringAsFixed(2)}',
+            value: '- ${CurrencyFormatter.compact(tx.comisionPlataforma)}',
             color: AppTheme.warningColor,
           ),
           const SizedBox(height: 6),
           _FinancialRow(
             label: 'Comision Stripe',
-            value: '- \$${tx.comisionStripe.toStringAsFixed(2)}',
+            value: '- ${CurrencyFormatter.compact(tx.comisionStripe)}',
             color: AppTheme.textTertiary,
           ),
           const SizedBox(height: 10),
@@ -589,7 +597,7 @@ class _TransactionCard extends StatelessWidget {
           const SizedBox(height: 10),
           _FinancialRow(
             label: 'Tu Ganancia Neta',
-            value: '\$${tx.montoTecnico.toStringAsFixed(2)}',
+            value: CurrencyFormatter.compact(tx.montoTecnico),
             color: AppTheme.successColor,
             bold: true,
           ),
