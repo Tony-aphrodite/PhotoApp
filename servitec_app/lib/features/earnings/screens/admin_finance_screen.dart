@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/transaction_model.dart';
 import '../../../data/repositories/payment_repository.dart';
 
@@ -235,7 +236,10 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '\$${_stats?.totalCommission.toStringAsFixed(2) ?? "0.00"}',
+                                  _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalCommission)
+                                      : '\$0.00 MXN',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 40,
                                     fontWeight: FontWeight.w800,
@@ -264,8 +268,10 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                               Expanded(
                                 child: _MetricCard(
                                   label: 'Ingresos Totales',
-                                  value:
-                                      '\$${_stats?.totalRevenue.toStringAsFixed(2) ?? "0.00"}',
+                                  value: _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalRevenue)
+                                      : '\$0.00 MXN',
                                   icon: Icons.trending_up_rounded,
                                   gradientColors: const [
                                     Color(0xFF00C853),
@@ -277,8 +283,10 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                               Expanded(
                                 child: _MetricCard(
                                   label: 'Pagado a Tecnicos',
-                                  value:
-                                      '\$${_stats?.totalPaidToTechnicians.toStringAsFixed(2) ?? "0.00"}',
+                                  value: _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalPaidToTechnicians)
+                                      : '\$0.00 MXN',
                                   icon: Icons.people_rounded,
                                   gradientColors: const [
                                     Color(0xFF2979FF),
@@ -296,8 +304,10 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                               Expanded(
                                 child: _MetricCard(
                                   label: 'Comision Plataforma',
-                                  value:
-                                      '\$${_stats?.totalCommission.toStringAsFixed(2) ?? "0.00"}',
+                                  value: _stats != null
+                                      ? CurrencyFormatter.format(
+                                          _stats!.totalCommission)
+                                      : '\$0.00 MXN',
                                   icon: Icons.account_balance_rounded,
                                   gradientColors: const [
                                     Color(0xFFFF9800),
@@ -606,14 +616,14 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                                           _TxRow(
                                             label:
                                                 'Total Cobrado',
-                                            value:
-                                                '\$${tx.montoTotal.toStringAsFixed(2)}',
+                                            value: CurrencyFormatter
+                                                .compact(tx.montoTotal),
                                           ),
                                           _TxRow(
                                             label:
                                                 'Tu Comision (15%)',
                                             value:
-                                                '+\$${tx.comisionPlataforma.toStringAsFixed(2)}',
+                                                '+${CurrencyFormatter.compact(tx.comisionPlataforma)}',
                                             color: AppTheme
                                                 .successColor,
                                           ),
@@ -621,7 +631,7 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                                             label:
                                                 'Stripe (2.9%+\$0.30)',
                                             value:
-                                                '-\$${tx.comisionStripe.toStringAsFixed(2)}',
+                                                '-${CurrencyFormatter.compact(tx.comisionStripe)}',
                                             color: AppTheme
                                                 .textTertiary,
                                           ),
@@ -662,7 +672,8 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                                                   ),
                                                 ),
                                                 Text(
-                                                  '\$${tx.montoTecnico.toStringAsFixed(2)}',
+                                                  CurrencyFormatter.compact(
+                                                      tx.montoTecnico),
                                                   style: GoogleFonts
                                                       .plusJakartaSans(
                                                     fontSize: 13,
