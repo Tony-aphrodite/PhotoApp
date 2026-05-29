@@ -68,13 +68,26 @@ class AdminTechniciansScreen extends StatelessWidget {
             child: StreamBuilder<List<UserModel>>(
               stream: context.read<UserRepository>().getAllTechnicians(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    !snapshot.hasData) {
                   return const Padding(
                     padding: EdgeInsets.only(top: 100),
                     child: Center(
                       child: CircularProgressIndicator(
                         color: AppTheme.primaryColor,
                         strokeWidth: 3,
+                      ),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Center(
+                      child: Text(
+                        'Error: ${snapshot.error}',
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   );
