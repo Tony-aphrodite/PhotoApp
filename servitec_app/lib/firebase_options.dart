@@ -22,6 +22,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '709333360623',
     projectId: 'servicios-domicilio-mvp',
     storageBucket: 'servicios-domicilio-mvp.firebasestorage.app',
+    authDomain: 'servicios-domicilio-mvp.firebaseapp.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
