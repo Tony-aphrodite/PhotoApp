@@ -329,12 +329,50 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
                 .read<ServiceRepository>()
                 .getClientServices(user.uid),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  !snapshot.hasData) {
                 return const SliverFillRemaining(
                   child: Center(
                     child: CircularProgressIndicator(
                       color: AppTheme.primaryColor,
                       strokeWidth: 3,
+                    ),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return SliverFillRemaining(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.error_outline_rounded,
+                              size: 48,
+                              color:
+                                  AppTheme.errorColor.withValues(alpha: 0.6)),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error al cargar servicios',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '${snapshot.error}',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: AppTheme.textTertiary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 );
@@ -419,40 +457,39 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
         ],
       ),
 
-      // Floating gradient FAB with glow
-      floatingActionButton: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
+      // Compact gradient FAB
+      floatingActionButton: GestureDetector(
+        onTap: () => context.push('/client/create-service'),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: const LinearGradient(
+              colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF14BDAC).withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF14BDAC).withValues(alpha: 0.35),
-              blurRadius: 20,
-              offset: const Offset(0, 6),
-            ),
-            BoxShadow(
-              color: const Color(0xFF0D7377).withValues(alpha: 0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: FloatingActionButton.extended(
-          onPressed: () => context.push('/client/create-service'),
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          highlightElevation: 0,
-          icon: const Icon(Icons.add_rounded, size: 22),
-          label: Text(
-            'Solicitar Servicio',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.2,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+              const SizedBox(width: 6),
+              Text(
+                'Solicitar',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
           ),
         ),
       ),
