@@ -1,12 +1,14 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/phone_visibility.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
@@ -30,16 +32,6 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
-  }
-
-  void _openWhatsApp(String phone, String serviceName) async {
-    final message = Uri.encodeComponent(
-      'Hola, te contacto por el servicio de ServiTec: $serviceName',
-    );
-    final url = Uri.parse('https://wa.me/$phone?text=$message');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
   }
 
   @override
@@ -93,7 +85,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                   ),
                 ),
                 actions: [
-                  if (service.tecnicoId != null || isClient)
+                  if (true) // Always show chat button
                     Padding(
                       padding: const EdgeInsets.all(8),
                       child: Container(
@@ -126,8 +118,24 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                               onPageChanged: (i) =>
                                   setState(() => _currentPage = i),
                               itemBuilder: (context, index) {
+                                final url = service.fotos[index];
+                                if (url.startsWith('data:')) {
+                                  try {
+                                    final b64 = url.split(',').last;
+                                    return Image.memory(
+                                      base64Decode(b64),
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    );
+                                  } catch (_) {
+                                    return Container(
+                                      color: AppTheme.dividerColor,
+                                      child: const Icon(Icons.broken_image),
+                                    );
+                                  }
+                                }
                                 return CachedNetworkImage(
-                                  imageUrl: service.fotos[index],
+                                  imageUrl: url,
                                   fit: BoxFit.cover,
                                   width: double.infinity,
                                   placeholder: (_, __) => Container(
@@ -416,8 +424,8 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                               _InfoRow(
                                 icon: Icons.attach_money,
                                 label: 'Costo estimado',
-                                value:
-                                    '\$${service.estimacionCosto!.toStringAsFixed(2)}',
+                                value: CurrencyFormatter.format(
+                                    service.estimacionCosto!),
                                 valueColor: AppTheme.primaryColor,
                               ),
                             ],
@@ -449,17 +457,23 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         _PremiumPersonCard(
                           title: 'Cliente',
                           name: service.clienteNombre,
-                          subtitle: service.clienteTelefono,
+                          subtitle: PhoneVisibility.display(
+                              service.clienteTelefono, service.estado),
                           iconColor: AppTheme.secondaryColor,
                           gradientColors: const [
                             Color(0xFF14BDAC),
                             Color(0xFF69F0AE),
                           ],
-                          onMessageTap: () => _openWhatsApp(
-                            service.clienteTelefono,
-                            service.titulo,
-                          ),
+                          onMessageTap: () =>
+                              context.push('/chat/${service.id}'),
                         ),
+                      ],
+
+                      // In-app communication notice (only when a technician
+                      // is assigned and conversation matters)
+                      if (service.tecnicoNombre != null) ...[
+                        const SizedBox(height: 12),
+                        const _InAppCommsNotice(),
                       ],
 
                       const SizedBox(height: 24),
@@ -512,7 +526,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                               context.push('/payment/${service.id}'),
                           icon: Icons.payment_rounded,
                           label:
-                              'Pagar \$${(service.costoFinal ?? service.estimacionCosto ?? 0).toStringAsFixed(2)}',
+                              'Pagar ${CurrencyFormatter.compact(service.costoFinal ?? service.estimacionCosto ?? 0)}',
                           gradientColors: const [
                             Color(0xFF00C853),
                             Color(0xFF69F0AE),
@@ -834,6 +848,42 @@ class _PremiumPersonCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InAppCommsNotice extends StatelessWidget {
+  const _InAppCommsNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined,
+              size: 18, color: AppTheme.primaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Mantén toda la comunicación dentro de ServiTec. Estás protegido por la plataforma — pagos, garantías y soporte solo aplican a servicios gestionados en la app.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11.5,
+                height: 1.4,
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
