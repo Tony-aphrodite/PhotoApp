@@ -138,7 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen>
             behavior: SnackBarBehavior.floating,
             margin: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
           ),
         );
@@ -188,7 +188,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                 behavior: SnackBarBehavior.floating,
                 margin: const EdgeInsets.all(16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               ),
             );
@@ -253,7 +253,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
+                                    borderRadius: BorderRadius.circular(16),
                                     color: Colors.white.withValues(alpha: 0.05),
                                     border: Border.all(
                                       color: Colors.white.withValues(alpha: 0.08),
@@ -334,7 +334,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                             Row(
                               children: [
                                 Expanded(
-                                  child: _buildInputField(
+                                  child: _GlassInput(
                                     controller: _nombreController,
                                     focusNode: _nombreFocus,
                                     isFocused: _nombreFocused,
@@ -348,7 +348,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: _buildInputField(
+                                  child: _GlassInput(
                                     controller: _apellidoController,
                                     focusNode: _apellidoFocus,
                                     isFocused: _apellidoFocused,
@@ -365,7 +365,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                             const SizedBox(height: 16),
 
-                            _buildInputField(
+                            _GlassInput(
                               controller: _emailController,
                               focusNode: _emailFocus,
                               isFocused: _emailFocused,
@@ -383,7 +383,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                             const SizedBox(height: 16),
 
-                            _buildInputField(
+                            _GlassInput(
                               controller: _telefonoController,
                               focusNode: _telefonoFocus,
                               isFocused: _telefonoFocused,
@@ -398,7 +398,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                             const SizedBox(height: 16),
 
-                            _buildInputField(
+                            _GlassInput(
                               controller: _passwordController,
                               focusNode: _passwordFocus,
                               isFocused: _passwordFocused,
@@ -427,7 +427,7 @@ class _RegisterScreenState extends State<RegisterScreen>
 
                             const SizedBox(height: 16),
 
-                            _buildInputField(
+                            _GlassInput(
                               controller: _confirmPasswordController,
                               focusNode: _confirmPasswordFocus,
                               isFocused: _confirmPasswordFocused,
@@ -503,7 +503,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                         vertical: 10,
                                       ),
                                       decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(16),
                                         color: isSelected
                                             ? AppTheme.secondaryColor
                                                 .withValues(alpha: 0.15)
@@ -648,7 +648,7 @@ class _RegisterScreenState extends State<RegisterScreen>
               width: 48,
               height: 48,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 gradient: isSelected
                     ? const LinearGradient(
                         begin: Alignment.topLeft,
@@ -697,80 +697,6 @@ class _RegisterScreenState extends State<RegisterScreen>
     );
   }
 
-  Widget _buildInputField({
-    required TextEditingController controller,
-    required FocusNode focusNode,
-    required bool isFocused,
-    required String hint,
-    required IconData icon,
-    bool obscureText = false,
-    TextInputType? keyboardType,
-    TextInputAction? textInputAction,
-    Widget? suffix,
-    String? Function(String?)? validator,
-    void Function(String)? onSubmitted,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isFocused
-              ? AppTheme.secondaryColor.withValues(alpha: 0.6)
-              : Colors.white.withValues(alpha: 0.08),
-          width: isFocused ? 1.5 : 1,
-        ),
-        color: Colors.white.withValues(alpha: isFocused ? 0.08 : 0.05),
-      ),
-      child: TextFormField(
-        controller: controller,
-        focusNode: focusNode,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        textInputAction: textInputAction,
-        onFieldSubmitted: onSubmitted,
-        validator: validator,
-        style: GoogleFonts.plusJakartaSans(
-          color: Colors.white,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        cursorColor: AppTheme.secondaryColor,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: GoogleFonts.plusJakartaSans(
-            color: Colors.white.withValues(alpha: 0.3),
-            fontSize: 15,
-          ),
-          prefixIcon: Icon(
-            icon,
-            color: isFocused
-                ? AppTheme.secondaryColor
-                : Colors.white.withValues(alpha: 0.3),
-            size: 20,
-          ),
-          suffixIcon: suffix != null
-              ? Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: suffix,
-                )
-              : null,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-          errorStyle: GoogleFonts.plusJakartaSans(
-            color: const Color(0xFFFF6B6B),
-            fontSize: 12,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildGradientButton({
     required VoidCallback? onTap,
     required bool isLoading,
@@ -783,7 +709,7 @@ class _RegisterScreenState extends State<RegisterScreen>
         width: double.infinity,
         height: 56,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           gradient: onTap != null
               ? const LinearGradient(
                   begin: Alignment.centerLeft,
@@ -901,6 +827,112 @@ class _RegisterScreenState extends State<RegisterScreen>
           ),
         );
       },
+    );
+  }
+}
+
+class _GlassInput extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool isFocused;
+  final String hint;
+  final IconData icon;
+  final bool obscureText;
+  final TextInputType? keyboardType;
+  final TextInputAction? textInputAction;
+  final Widget? suffix;
+  final String? Function(String?)? validator;
+  final void Function(String)? onSubmitted;
+
+  const _GlassInput({
+    required this.controller,
+    required this.focusNode,
+    required this.isFocused,
+    required this.hint,
+    required this.icon,
+    this.obscureText = false,
+    this.keyboardType,
+    this.textInputAction,
+    this.suffix,
+    this.validator,
+    this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isFocused
+              ? const Color(0xFF5BEAD6).withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.1),
+          width: 1.5,
+        ),
+        color: isFocused
+            ? Colors.white.withValues(alpha: 0.1)
+            : Colors.white.withValues(alpha: 0.06),
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF14BDAC).withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  spreadRadius: -2,
+                ),
+              ]
+            : null,
+      ),
+      child: TextFormField(
+        controller: controller,
+        focusNode: focusNode,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        onFieldSubmitted: onSubmitted,
+        validator: validator,
+        style: GoogleFonts.plusJakartaSans(
+          color: Colors.white.withValues(alpha: 0.95),
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+        ),
+        cursorColor: const Color(0xFF5BEAD6),
+        cursorWidth: 1.5,
+        decoration: InputDecoration(
+          filled: false, // CRITICAL: override theme's filled:true
+          hintText: hint,
+          hintStyle: GoogleFonts.plusJakartaSans(
+            color: Colors.white.withValues(alpha: 0.3),
+            fontSize: 15,
+            fontWeight: FontWeight.w400,
+          ),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 16, right: 12),
+            child: Icon(
+              icon,
+              color: isFocused
+                  ? const Color(0xFF5BEAD6)
+                  : Colors.white.withValues(alpha: 0.3),
+              size: 20,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 48),
+          suffixIcon: suffix,
+          suffixIconConstraints: const BoxConstraints(minWidth: 48),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          errorBorder: InputBorder.none,
+          focusedErrorBorder: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 18),
+          errorStyle: GoogleFonts.plusJakartaSans(
+            color: const Color(0xFFFF8A80),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 }
