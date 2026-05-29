@@ -148,10 +148,13 @@ class ServiceRepository {
   Stream<List<ServiceModel>> getPendingServices() {
     return _servicesRef
         .where('estado', isEqualTo: AppConstants.statusPending)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      final list =
+          snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList();
+      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return list;
+    });
   }
 
   // Update service status with validation
@@ -174,6 +177,17 @@ class ServiceRepository {
     }
 
     await _servicesRef.doc(serviceId).update(updates);
+
+    // Narrate the transition in the service chat thread so both parties have
+    // a single, audit-ready timeline (no reason to leave the app).
+    final label = _statusLabel(newStatus);
+    if (label != null) {
+      await postSystemMessage(
+        serviceId,
+        label,
+        metadata: {'event': 'status_change', 'estado': newStatus},
+      );
+    }
   }
 
   // Assign technician to service
@@ -191,6 +205,35 @@ class ServiceRepository {
       'asignadoAt': Timestamp.now(),
       'updatedAt': Timestamp.now(),
     });
+
+    await postSystemMessage(
+      serviceId,
+      'Técnico asignado: $technicianName',
+      metadata: {
+        'event': 'technician_assigned',
+        'tecnicoId': technicianId,
+        'tipoAsignacion': assignmentType,
+      },
+    );
+  }
+
+  static String? _statusLabel(String status) {
+    switch (status) {
+      case AppConstants.statusAssigned:
+        return 'Servicio asignado a un técnico';
+      case AppConstants.statusInProgress:
+        return 'El técnico inició el servicio';
+      case AppConstants.statusCompleted:
+        return 'Servicio marcado como completado';
+      case AppConstants.statusPaymentPending:
+        return 'Pago pendiente';
+      case AppConstants.statusPaid:
+        return 'Pago recibido';
+      case AppConstants.statusCancelled:
+        return 'Servicio cancelado';
+      default:
+        return null;
+    }
   }
 
   // Update service
@@ -207,6 +250,49 @@ class ServiceRepository {
         .doc(serviceId)
         .collection(AppConstants.messagesSubcollection)
         .add(message.toFirestore());
+  }
+
+  /// Post a system message into the service chat thread.
+  ///
+  /// Used for lifecycle narration (assignment, status changes, quotation
+  /// events, payment) so the in-app thread is the single source of truth and
+  /// users have no operational reason to jump to WhatsApp.
+  Future<void> postSystemMessage(
+    String serviceId,
+    String text, {
+    Map<String, dynamic>? metadata,
+  }) async {
+    final message = MessageModel(
+      id: '',
+      userId: 'system',
+      nombreUsuario: 'ServiTec',
+      mensaje: text,
+      timestamp: DateTime.now(),
+      tipo: MessageModel.tipoSistema,
+      metadata: metadata,
+    );
+    await sendMessage(serviceId, message);
+  }
+
+  /// Send an image message (data URL stored inline, matching existing
+  /// base64-in-Firestore storage strategy).
+  Future<void> sendImageMessage({
+    required String serviceId,
+    required String userId,
+    required String userName,
+    required String imageDataUrl,
+    String caption = '',
+  }) async {
+    final message = MessageModel(
+      id: '',
+      userId: userId,
+      nombreUsuario: userName,
+      mensaje: caption,
+      timestamp: DateTime.now(),
+      tipo: MessageModel.tipoImagen,
+      imageData: imageDataUrl,
+    );
+    await sendMessage(serviceId, message);
   }
 
   static const int _initialMessageLimit = 50;
