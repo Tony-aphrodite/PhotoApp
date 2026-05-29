@@ -1,10 +1,16 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/contact_info_filter.dart';
 import '../../../data/models/message_model.dart';
 import '../../../data/repositories/service_repository.dart';
+import '../../../data/repositories/storage_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
 
@@ -20,6 +26,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  final _picker = ImagePicker();
+  bool _uploadingImage = false;
 
   // Lazy loading older messages
   final List<MessageModel> _olderMessages = [];
@@ -62,6 +70,15 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
+    // Block off-platform contact-info sharing client-side. Server-side
+    // enforcement (Cloud Function on message create) is the real boundary —
+    // tracked in 5-29.md section 4.
+    final violation = ContactInfoFilter.scan(text);
+    if (violation != null) {
+      _showViolationSnackbar(violation);
+      return;
+    }
+
     final authState = context.read<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return;
     final user = authState.user;
@@ -76,8 +93,125 @@ class _ChatScreenState extends State<ChatScreen> {
 
     context.read<ServiceRepository>().sendMessage(widget.serviceId, message);
     _messageController.clear();
+    _scrollToBottom();
+  }
 
-    // Scroll to bottom
+  Future<void> _sendImage() async {
+    if (_uploadingImage) return;
+
+    final source = await _showImageSourceSheet();
+    if (source == null) return;
+
+    final picked = await _picker.pickImage(
+      source: source,
+      maxWidth: 1400,
+      imageQuality: 75,
+    );
+    if (picked == null) return;
+
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthAuthenticated) return;
+    final user = authState.user;
+
+    setState(() => _uploadingImage = true);
+    try {
+      final storageRepo = context.read<StorageRepository>();
+      final dataUrl = await storageRepo.uploadChatImage(File(picked.path));
+      await context.read<ServiceRepository>().sendImageMessage(
+            serviceId: widget.serviceId,
+            userId: user.uid,
+            userName: user.fullName,
+            imageDataUrl: dataUrl,
+          );
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo enviar la imagen: $e'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingImage = false);
+    }
+  }
+
+  Future<ImageSource?> _showImageSourceSheet() {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.dividerColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined,
+                  color: AppTheme.primaryColor),
+              title: Text(
+                'Tomar foto',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined,
+                  color: AppTheme.primaryColor),
+              title: Text(
+                'Elegir de galería',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showViolationSnackbar(ContactViolation violation) {
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.shield_outlined, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                violation.message,
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppTheme.errorColor,
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -151,6 +285,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          const _InAppCommsBanner(),
           // Messages
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
@@ -265,7 +400,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     final msgIndex = index - 1;
                     final message = allMessages[msgIndex];
                     final isMe = message.userId == currentUserId;
-                    final isSystem = message.tipo == 'sistema';
+                    final isSystem = message.isSystem;
 
                     if (isSystem) {
                       return _SystemMessage(message: message);
@@ -322,7 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
           // Input Bar
           Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -337,6 +472,36 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  // Attach image button
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _uploadingImage ? null : _sendImage,
+                        customBorder: const CircleBorder(),
+                        child: Center(
+                          child: _uploadingImage
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: AppTheme.primaryColor,
+                                  ),
+                                )
+                              : const Icon(Icons.add_photo_alternate_outlined,
+                                  color: AppTheme.primaryColor, size: 22),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Container(
                       decoration: BoxDecoration(
@@ -423,6 +588,37 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
+class _InAppCommsBanner extends StatelessWidget {
+  const _InAppCommsBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      color: AppTheme.primaryColor.withValues(alpha: 0.08),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined,
+              size: 14, color: AppTheme.primaryColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'No compartas teléfonos, correos ni enlaces externos. Tu protección aplica solo dentro de ServiTec.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                color: AppTheme.primaryColor,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ChatBubble extends StatelessWidget {
   final MessageModel message;
   final bool isMe;
@@ -470,7 +666,9 @@ class _ChatBubble extends StatelessWidget {
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.72,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: message.isImage
+                  ? const EdgeInsets.all(4)
+                  : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isMe ? const Color(0xFF0A6B6E) : Colors.white,
                 borderRadius: BorderRadius.only(
@@ -492,7 +690,7 @@ class _ChatBubble extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!isMe)
+                  if (!isMe && !message.isImage)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
@@ -504,25 +702,32 @@ class _ChatBubble extends StatelessWidget {
                         ),
                       ),
                     ),
-                  Text(
-                    message.mensaje,
-                    style: GoogleFonts.plusJakartaSans(
-                      color: isMe ? Colors.white : AppTheme.textPrimary,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Text(
-                      DateFormat('HH:mm').format(message.timestamp),
+                  if (message.isImage)
+                    _ImageContent(message: message)
+                  else
+                    Text(
+                      message.mensaje,
                       style: GoogleFonts.plusJakartaSans(
-                        color: isMe
-                            ? Colors.white.withValues(alpha: 0.6)
-                            : AppTheme.textTertiary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        color: isMe ? Colors.white : AppTheme.textPrimary,
+                        fontSize: 15,
+                        height: 1.4,
+                      ),
+                    ),
+                  Padding(
+                    padding: message.isImage
+                        ? const EdgeInsets.only(top: 4, right: 6, bottom: 2)
+                        : const EdgeInsets.only(top: 4),
+                    child: Align(
+                      alignment: Alignment.bottomRight,
+                      child: Text(
+                        DateFormat('HH:mm').format(message.timestamp),
+                        style: GoogleFonts.plusJakartaSans(
+                          color: isMe
+                              ? Colors.white.withValues(alpha: 0.6)
+                              : AppTheme.textTertiary,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -532,6 +737,63 @@ class _ChatBubble extends StatelessWidget {
           ),
           if (isMe) const SizedBox(width: 4),
         ],
+      ),
+    );
+  }
+}
+
+class _ImageContent extends StatelessWidget {
+  final MessageModel message;
+
+  const _ImageContent({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final dataUrl = message.imageData;
+    if (dataUrl == null || dataUrl.isEmpty) {
+      return Container(
+        width: 200,
+        height: 160,
+        color: AppTheme.dividerColor,
+        child: const Icon(Icons.broken_image_outlined,
+            color: Colors.white54, size: 32),
+      );
+    }
+
+    try {
+      final b64 = dataUrl.split(',').last;
+      final Uint8List bytes = base64Decode(b64);
+      return GestureDetector(
+        onTap: () => _openFullscreen(context, bytes),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.memory(
+            bytes,
+            fit: BoxFit.cover,
+            width: 220,
+          ),
+        ),
+      );
+    } catch (_) {
+      return Container(
+        width: 200,
+        height: 160,
+        color: AppTheme.dividerColor,
+        child: const Icon(Icons.broken_image_outlined,
+            color: Colors.white54, size: 32),
+      );
+    }
+  }
+
+  void _openFullscreen(BuildContext context, Uint8List bytes) {
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => GestureDetector(
+        onTap: () => Navigator.pop(ctx),
+        child: InteractiveViewer(
+          child: Center(child: Image.memory(bytes)),
+        ),
       ),
     );
   }
