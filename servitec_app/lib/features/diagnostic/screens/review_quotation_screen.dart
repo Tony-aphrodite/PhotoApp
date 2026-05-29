@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
+import '../../../core/widgets/service_card.dart';
 import '../../../data/models/quotation_model.dart';
+import '../../../data/repositories/service_repository.dart';
 
 class ReviewQuotationScreen extends StatefulWidget {
   final String quotationId;
@@ -40,12 +44,29 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
     if (servicioId != null) {
       final newStatus =
           response == 'aprobada' ? 'en_reparacion' : 'cotizacion_rechazada';
+      final total = (doc.data()?['total'] as num?)?.toDouble();
       await firestore.collection('servicios').doc(servicioId).update({
         'estado': newStatus,
         'updatedAt': Timestamp.now(),
-        if (response == 'aprobada')
-          'costoFinal': (doc.data()?['total'] as num?)?.toDouble(),
+        if (response == 'aprobada' && total != null) 'costoFinal': total,
       });
+
+      // Narrate the quotation decision in the service chat thread.
+      if (context.mounted) {
+        final text = response == 'aprobada'
+            ? 'Cotización aprobada${total != null ? ' — Total: ${CurrencyFormatter.format(total)}' : ''}. El técnico puede proceder con la reparación.'
+            : 'Cotización rechazada por el cliente.';
+        await context.read<ServiceRepository>().postSystemMessage(
+              servicioId,
+              text,
+              metadata: {
+                'event': response == 'aprobada'
+                    ? 'quotation_approved'
+                    : 'quotation_rejected',
+                if (total != null) 'total': total,
+              },
+            );
+      }
     }
 
     if (context.mounted) {
@@ -210,17 +231,10 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(
                                     AppTheme.radiusMedium),
-                                child: CachedNetworkImage(
-                                  imageUrl: quotation.fotosDiagnostico[i],
-                                  fit: BoxFit.cover,
+                                child: SizedBox(
                                   width: double.infinity,
-                                  placeholder: (_, __) => Container(
-                                    color: AppTheme.backgroundLight,
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        color: AppTheme.primaryColor,
-                                      ),
-                                    ),
+                                  child: ServiceCard.buildImage(
+                                    quotation.fotosDiagnostico[i],
                                   ),
                                 ),
                               ),
@@ -398,7 +412,7 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '${item.cantidad} x \$${item.precioUnitario.toStringAsFixed(2)}',
+                                        '${item.cantidad} x ${CurrencyFormatter.compact(item.precioUnitario)}',
                                         style: GoogleFonts.plusJakartaSans(
                                           fontSize: 12,
                                           color: AppTheme.textTertiary,
@@ -408,7 +422,7 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                                   ),
                                 ),
                                 Text(
-                                  '\$${item.subtotal.toStringAsFixed(2)}',
+                                  CurrencyFormatter.format(item.subtotal),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700,
@@ -473,7 +487,7 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                             ),
                           ),
                           Text(
-                            '\$${quotation.total.toStringAsFixed(2)}',
+                            CurrencyFormatter.format(quotation.total),
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
@@ -529,7 +543,7 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                                   size: 22),
                               const SizedBox(width: 10),
                               Text(
-                                'Aprobar (\$${quotation.total.toStringAsFixed(2)})',
+                                'Aprobar (${CurrencyFormatter.compact(quotation.total)})',
                                 style: GoogleFonts.plusJakartaSans(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -629,7 +643,7 @@ class _GradientRow extends StatelessWidget {
           ),
         ),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
+          CurrencyFormatter.format(amount),
           style: GoogleFonts.plusJakartaSans(
             fontSize: 15,
             fontWeight: FontWeight.w600,
