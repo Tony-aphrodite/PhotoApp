@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/repositories/config_repository.dart';
 
 class AdminTariffsScreen extends StatefulWidget {
@@ -386,8 +387,9 @@ class _AdminTariffsScreenState extends State<AdminTariffsScreen> {
                                       children: [
                                         _TarifaTag(
                                           icon: Icons.attach_money_rounded,
-                                          text:
-                                              '\$${tarifa.tarifaBase.toStringAsFixed(0)}',
+                                          text: CurrencyFormatter
+                                              .formatNoDecimals(
+                                                  tarifa.tarifaBase),
                                         ),
                                         const SizedBox(width: 8),
                                         _TarifaTag(
