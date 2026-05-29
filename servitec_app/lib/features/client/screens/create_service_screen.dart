@@ -5,8 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/location_picker.dart';
 import '../../../data/models/service_model.dart';
@@ -142,9 +144,9 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
 
     final picked = await _picker.pickImage(
       source: source,
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 80,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 60,
     );
 
     if (picked != null) {
@@ -273,13 +275,30 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
 
       // Upload photos with real service ID
       if (_photos.isNotEmpty) {
-        final storageRepo = context.read<StorageRepository>();
-        final photoUrls = await storageRepo.uploadServicePhotos(
-          createdService.id,
-          _photos,
-        );
-        await serviceRepo
-            .updateService(createdService.id, {'fotos': photoUrls});
+        try {
+          final storageRepo = context.read<StorageRepository>();
+          final photoUrls = await storageRepo.uploadServicePhotos(
+            createdService.id,
+            _photos,
+          );
+          await serviceRepo
+              .updateService(createdService.id, {'fotos': photoUrls});
+        } catch (e, stack) {
+          // Photos failed to upload but service was created
+          if (mounted) {
+            String msg = e.toString();
+            if (e is FirebaseException) {
+              msg = 'code=${e.code} message=${e.message} plugin=${e.plugin}';
+            }
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Fotos error: $msg'),
+                backgroundColor: Colors.orange,
+                duration: const Duration(seconds: 15),
+              ),
+            );
+          }
+        }
       }
 
       if (mounted) {
@@ -558,7 +577,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
               _categoryGradients[index % _categoryGradients.length];
           final tarifa = _tarifas[cat];
           final tarifaText = tarifa != null
-              ? '\$${tarifa.tarifaBase.toStringAsFixed(0)}'
+              ? CurrencyFormatter.formatNoDecimals(tarifa.tarifaBase)
               : '';
 
           return GestureDetector(
@@ -711,7 +730,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '\$${_estimatedCost!.toStringAsFixed(2)} USD',
+                  CurrencyFormatter.format(_estimatedCost!),
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 26,
                     fontWeight: FontWeight.w800,
@@ -925,7 +944,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
                   )
                 : Text(
                     _estimatedCost != null
-                        ? 'Enviar Solicitud (\$${_estimatedCost!.toStringAsFixed(2)})'
+                        ? 'Enviar Solicitud (${CurrencyFormatter.compact(_estimatedCost!)})'
                         : 'Enviar Solicitud',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 16,
