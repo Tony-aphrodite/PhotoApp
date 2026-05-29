@@ -6,7 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/quotation_model.dart';
+import '../../../data/repositories/service_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
@@ -114,6 +116,20 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         'estado': 'cotizacion_enviada',
         'updatedAt': Timestamp.now(),
       });
+
+      // Narrate the event in the service chat thread.
+      if (mounted) {
+        await context.read<ServiceRepository>().postSystemMessage(
+              widget.serviceId,
+              'Cotización enviada — Total: ${CurrencyFormatter.format(_total)} (IVA incluido)',
+              metadata: {
+                'event': 'quotation_sent',
+                'total': _total,
+                'subtotal': _subtotal,
+                'iva': _tax,
+              },
+            );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -471,7 +487,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                                 ),
                               ),
                               Text(
-                                '\$${item.subtotal.toStringAsFixed(2)}',
+                                CurrencyFormatter.format(item.subtotal),
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -642,7 +658,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                         ),
                       ),
                       Text(
-                        '\$${_total.toStringAsFixed(2)}',
+                        CurrencyFormatter.format(_total),
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 26,
                           fontWeight: FontWeight.w800,
@@ -806,7 +822,7 @@ class _GradientTotalRow extends StatelessWidget {
           ),
         ),
         Text(
-          '\$${amount.toStringAsFixed(2)}',
+          CurrencyFormatter.format(amount),
           style: GoogleFonts.plusJakartaSans(
             fontSize: 15,
             fontWeight: FontWeight.w600,
