@@ -1,9 +1,12 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../data/models/service_model.dart';
 import '../theme/app_theme.dart';
+import '../utils/currency_formatter.dart';
 import 'status_badge.dart';
 
 class ServiceCard extends StatelessWidget {
@@ -40,7 +43,7 @@ class ServiceCard extends StatelessWidget {
     String? costText;
     final cost = service.estimacionCosto;
     if (cost != null) {
-      costText = '\$${cost.toStringAsFixed(2)}';
+      costText = CurrencyFormatter.format(cost);
     }
 
     return GestureDetector(
@@ -222,6 +225,37 @@ class ServiceCard extends StatelessWidget {
     );
   }
 
+  static Widget buildImage(String imageUrl, {BoxFit fit = BoxFit.cover}) {
+    if (imageUrl.startsWith('data:')) {
+      try {
+        final base64Str = imageUrl.split(',').last;
+        final bytes = base64Decode(base64Str);
+        return Image.memory(bytes, fit: fit);
+      } catch (_) {
+        return const Icon(Icons.broken_image, color: AppTheme.textTertiary);
+      }
+    }
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      fit: fit,
+      placeholder: (_, __) => const Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppTheme.primaryColor,
+          ),
+        ),
+      ),
+      errorWidget: (_, __, ___) => const Icon(
+        Icons.image_not_supported_outlined,
+        color: AppTheme.textTertiary,
+        size: 32,
+      ),
+    );
+  }
+
   Widget _buildHeroImage(String imageUrl, String estado) {
     return SizedBox(
       height: 160,
@@ -229,31 +263,7 @@ class ServiceCard extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
-            imageUrl: imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(
-              color: AppTheme.dividerColor,
-              child: const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppTheme.primaryColor,
-                  ),
-                ),
-              ),
-            ),
-            errorWidget: (_, __, ___) => Container(
-              color: AppTheme.dividerColor,
-              child: const Icon(
-                Icons.image_not_supported_outlined,
-                color: AppTheme.textTertiary,
-                size: 32,
-              ),
-            ),
-          ),
+          buildImage(imageUrl),
           Positioned(
             bottom: 0,
             left: 0,
