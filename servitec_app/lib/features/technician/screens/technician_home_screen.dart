@@ -24,7 +24,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -86,7 +86,10 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
                     dividerColor: Colors.transparent,
                     splashBorderRadius: BorderRadius.circular(12),
                     padding: const EdgeInsets.all(4),
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
                     tabs: const [
+                      Tab(text: 'Disponibles'),
                       Tab(text: 'Asignados'),
                       Tab(text: 'En Progreso'),
                       Tab(text: 'Completados'),
@@ -199,12 +202,38 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
             ),
           ];
         },
-        body: StreamBuilder<List<ServiceModel>>(
-          stream: context
-              .read<ServiceRepository>()
-              .getTechnicianServices(user.uid),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+        body: _TechnicianTabBody(
+          tabController: _tabController,
+          userId: user.uid,
+        ),
+      ),
+    );
+  }
+}
+
+class _TechnicianTabBody extends StatelessWidget {
+  final TabController tabController;
+  final String userId;
+
+  const _TechnicianTabBody({
+    required this.tabController,
+    required this.userId,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final serviceRepo = context.read<ServiceRepository>();
+
+    return StreamBuilder<List<ServiceModel>>(
+      stream: serviceRepo.getPendingServices(),
+      builder: (context, pendingSnapshot) {
+        return StreamBuilder<List<ServiceModel>>(
+          stream: serviceRepo.getTechnicianServices(userId),
+          builder: (context, mySnapshot) {
+            if ((pendingSnapshot.connectionState == ConnectionState.waiting &&
+                    !pendingSnapshot.hasData) ||
+                (mySnapshot.connectionState == ConnectionState.waiting &&
+                    !mySnapshot.hasData)) {
               return Center(
                 child: CircularProgressIndicator(
                   color: AppTheme.primaryColor,
@@ -213,27 +242,35 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
               );
             }
 
-            final allServices = snapshot.data ?? [];
-            final assigned = allServices
+            final pendingServices = pendingSnapshot.data ?? [];
+            final myServices = mySnapshot.data ?? [];
+            final assigned = myServices
                 .where((s) => s.estado == AppConstants.statusAssigned)
                 .toList();
-            final inProgress = allServices
+            final inProgress = myServices
                 .where((s) => s.estado == AppConstants.statusInProgress)
                 .toList();
-            final completed = allServices
+            final completed = myServices
                 .where((s) =>
                     s.estado == AppConstants.statusCompleted ||
                     s.estado == AppConstants.statusPaid)
                 .toList();
 
             return TabBarView(
-              controller: _tabController,
+              controller: tabController,
               children: [
+                _ServiceList(
+                  services: pendingServices,
+                  emptyMessage: 'No hay servicios disponibles',
+                  emptySubMessage:
+                      'Las nuevas solicitudes de clientes apareceran aqui',
+                  emptyIcon: Icons.explore_outlined,
+                ),
                 _ServiceList(
                   services: assigned,
                   emptyMessage: 'No tienes servicios asignados',
                   emptySubMessage:
-                      'Los nuevos servicios apareceran aqui cuando te sean asignados',
+                      'Los servicios asignados apareceran aqui',
                   emptyIcon: Icons.assignment_outlined,
                 ),
                 _ServiceList(
@@ -253,8 +290,8 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
               ],
             );
           },
-        ),
-      ),
+        );
+      },
     );
   }
 }
