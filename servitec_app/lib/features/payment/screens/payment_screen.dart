@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/payment_repository.dart';
 import '../../../data/repositories/service_repository.dart';
@@ -77,7 +78,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final clientSecret = await paymentRepo.createPaymentIntent(
         servicioId: _service!.id,
         amount: _breakdown!.montoTotal,
-        currency: 'usd',
+        currency: 'mxn',
       );
 
       // 2. Initialize payment sheet
@@ -102,6 +103,20 @@ class _PaymentScreenState extends State<PaymentScreen> {
         comisionStripe: _breakdown!.comisionStripe,
         montoTecnico: _breakdown!.montoTecnico,
       );
+
+      // 5. Narrate the payment in the service chat thread.
+      if (mounted) {
+        await context.read<ServiceRepository>().postSystemMessage(
+              _service!.id,
+              'Pago recibido — ${CurrencyFormatter.format(_breakdown!.montoTotal)}. Comisión plataforma: ${CurrencyFormatter.format(_breakdown!.comisionPlataforma)}.',
+              metadata: {
+                'event': 'payment_received',
+                'montoTotal': _breakdown!.montoTotal,
+                'comisionPlataforma': _breakdown!.comisionPlataforma,
+                'montoTecnico': _breakdown!.montoTecnico,
+              },
+            );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -355,7 +370,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '\$${_breakdown!.montoTotal.toStringAsFixed(2)}',
+                                    CurrencyFormatter.format(
+                                        _breakdown!.montoTotal),
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 32,
                                       fontWeight: FontWeight.w800,
@@ -470,7 +486,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                   Text(
                                     _processing
                                         ? 'Procesando...'
-                                        : 'Pagar \$${_breakdown?.montoTotal.toStringAsFixed(2) ?? "0.00"}',
+                                        : 'Pagar ${_breakdown != null ? CurrencyFormatter.compact(_breakdown!.montoTotal) : "\$0.00"}',
                                     style: GoogleFonts.plusJakartaSans(
                                       color: Colors.white,
                                       fontSize: 17,
@@ -551,7 +567,7 @@ class _BreakdownRow extends StatelessWidget {
           ),
         ),
         Text(
-          '${isSubtract ? "-" : ""}\$${amount.toStringAsFixed(2)}',
+          '${isSubtract ? "-" : ""}${CurrencyFormatter.compact(amount)}',
           style: GoogleFonts.plusJakartaSans(
             fontSize: isBold ? 17 : 14,
             fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
