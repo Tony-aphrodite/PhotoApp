@@ -1,17 +1,23 @@
 import 'dart:io';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:uuid/uuid.dart';
 
 /// Stores images as base64 in Firestore (workaround for Storage API issue)
 class StorageRepository {
-  final FirebaseFirestore _firestore;
+  /// Only set when a caller injected one. Resolved lazily via [_firestore]
+  /// rather than in the constructor: `FirebaseFirestore.instance` throws when
+  /// no Firebase app has been initialized, which would make it impossible to
+  /// construct this class for the methods that never touch Firestore at all
+  /// (uploadChatImage just base64-encodes).
+  final FirebaseFirestore? _injectedFirestore;
   final _uuid = const Uuid();
 
+  FirebaseFirestore get _firestore =>
+      _injectedFirestore ?? FirebaseFirestore.instance;
+
   StorageRepository({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _injectedFirestore = firestore;
 
   // Upload profile photo -> store base64 in user document
   Future<String> uploadProfilePhoto(String userId, File file) async {

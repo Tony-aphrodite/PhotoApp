@@ -22,7 +22,10 @@ void main() {
       expect(map['tipo'], MessageModel.tipoTexto);
       expect(map['leido'], false);
       expect(map['timestamp'], isA<Timestamp>());
-      expect((map['timestamp'] as Timestamp).toDate(), now);
+      // Timestamp.toDate() hands back a *local* DateTime, and DateTime's ==
+      // compares the UTC flag as well as the instant — so compare in UTC or
+      // this only passes on a machine whose zone happens to be UTC.
+      expect((map['timestamp'] as Timestamp).toDate().toUtc(), now);
       expect(map.containsKey('imageData'), isFalse);
       expect(map.containsKey('metadata'), isFalse);
     });
