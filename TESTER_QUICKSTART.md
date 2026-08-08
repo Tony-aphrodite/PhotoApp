@@ -172,7 +172,21 @@ Open the service chat as either party. Try sending each of these:
 
 ---
 
-## Test 10 — Verify commission fell into the platform's balance
+## Test 10 — Appointments and the técnico's agenda
+
+1. On Device A (Cliente), open an assigned service and book an appointment for **tomorrow** (any slot).
+2. On Device B (Técnico), tap the **calendar icon** in the top right of the home screen.
+
+**Expected**:
+- **Mi Agenda** opens, grouped by day. The new appointment sits under **Mañana** with its time, duration, the service title, the client's name, and chips for *A domicilio* / *En taller* and *programada*.
+- Tap **Confirmar** → the chip flips to *confirmada* and the buttons become **Completada** / **No asistió**. In Firestore, `citas/{id}.estado` follows along.
+- Tap **Completada** → chip turns green and only **Ver servicio** remains.
+
+**The 24h reminder** runs hourly and only fires for appointments 24–25 hours out, so it won't trigger during a same-day test. To force it: `firebase functions:shell` → `appointmentReminderCron()` with an appointment booked for roughly this time tomorrow. Both devices should get *"Recordatorio de cita — Mañana a las HH:MM, a domicilio — {título}"*, and `citas/{id}.recordatorioEnviadoAt` gets stamped so it never sends twice.
+
+---
+
+## Test 11 — Verify commission fell into the platform's balance
 
 1. In Stripe dashboard (test mode) → **Balance** → should show 12% of the transaction accumulated.
 2. Under **Connect → Connected accounts** → the técnico's account → transaction of amount minus 12% posted to their pending balance.

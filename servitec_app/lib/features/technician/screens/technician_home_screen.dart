@@ -52,6 +52,14 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
               pinned: true,
               backgroundColor: const Color(0xFF0A2E36),
               surfaceTintColor: Colors.transparent,
+              actions: [
+                IconButton(
+                  onPressed: () => context.push('/technician/agenda'),
+                  icon: const Icon(Icons.calendar_month_rounded,
+                      color: Colors.white),
+                  tooltip: 'Mi Agenda',
+                ),
+              ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(52),
                 child: Container(

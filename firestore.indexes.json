@@ -95,6 +95,14 @@
       ]
     },
     {
+      "collectionGroup": "citas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
+        { "fieldPath": "fechaHora", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [

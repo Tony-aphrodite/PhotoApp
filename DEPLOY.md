@@ -78,7 +78,7 @@ firebase deploy --only firestore:rules,firestore:indexes
 firebase deploy --only functions
 ```
 
-**Expected outcome:** 9 functions deployed:
+**Expected outcome:** 10 functions deployed:
 - `setupTechnicianFiscal` (callable)
 - `createPaymentIntent` (HTTPS)
 - `createTechnicianConnectOnboardingLink` (callable)
@@ -88,6 +88,7 @@ firebase deploy --only functions
 - `onServiceCreated` (Firestore trigger)
 - `monthlyCommissionCron` (scheduler)
 - `gracePeriodDailyCron` (scheduler)
+- `appointmentReminderCron` (scheduler, hourly)
 
 This codebase replaces the legacy `servitec_app/functions/` — `firebase.json`
 points only here, both under codebase `default`. The deploy therefore *deletes*

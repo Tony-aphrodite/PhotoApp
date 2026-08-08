@@ -26,6 +26,7 @@ import '../features/validation/screens/admin_validation_screen.dart';
 import '../features/validation/screens/fiscal_onboarding_screen.dart';
 import '../features/validation/screens/stripe_connect_screen.dart';
 import '../features/appointment/screens/book_appointment_screen.dart';
+import '../features/appointment/screens/technician_agenda_screen.dart';
 import '../features/service/screens/service_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
@@ -216,6 +217,10 @@ class AppRouter {
       GoRoute(
         path: '/technician/documents',
         builder: (context, state) => const TechnicianDocumentsScreen(),
+      ),
+      GoRoute(
+        path: '/technician/agenda',
+        builder: (context, state) => const TechnicianAgendaScreen(),
       ),
       GoRoute(
         path: '/quotation/create/:serviceId',
