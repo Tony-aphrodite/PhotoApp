@@ -2,31 +2,22 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // CFDI artifacts (XML + branded PDF).
-    // Path: facturas/{facturaId}.{xml|pdf}
+    // Nothing in this bucket is reached by a client through these rules.
     //
-    // Reads are gated by inspecting the corresponding Firestore `facturas`
-    // document — only the emisor técnico, the receptor cliente, and admin
-    // may download. Writes are locked to the admin SDK (Cloud Functions).
-    match /facturas/{facturaFile} {
-      allow read: if request.auth != null && (
-        firestore.get(
-          /databases/(default)/documents/facturas/$(facturaFile.split('.')[0])
-        ).data.tecnicoUid == request.auth.uid ||
-        firestore.get(
-          /databases/(default)/documents/facturas/$(facturaFile.split('.')[0])
-        ).data.clienteUid == request.auth.uid ||
-        firestore.get(
-          /databases/(default)/documents/users/$(request.auth.uid)
-        ).data.rol == 'admin'
-      );
-
-      // Only Cloud Functions may upload — signed via the admin SDK, which
-      // bypasses rules. Direct client uploads are refused.
-      allow write: if false;
-    }
-
-    // Default: block anything not explicitly allowed above.
+    // CFDI artifacts live at facturas/{facturaId}.{xml,pdf}. Cloud Functions
+    // write them with the Admin SDK, which bypasses rules entirely, and the app
+    // opens them through the download-token URL saved on the Firestore
+    // `facturas` document. That document is already restricted to the emisor
+    // técnico, the receptor cliente, and admins — so the access boundary is
+    // enforced there, and anyone able to read the URL could read the invoice
+    // anyway.
+    //
+    // An earlier version gated reads here with firestore.get() against the
+    // `facturas` document. That is stricter in principle, but cross-service
+    // rules cannot even be *published* until a project Owner grants the Storage
+    // service agent a Firestore read role — the Console rejects them outright.
+    // Restore that version if the app ever switches to
+    // FirebaseStorage.ref(path).getDownloadURL(), which does go through rules.
     match /{allPaths=**} {
       allow read, write: if false;
     }
