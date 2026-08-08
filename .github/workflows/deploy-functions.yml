@@ -1,0 +1,111 @@
+# Deploy Cloud Functions from a button in the GitHub web UI.
+#
+# Exists because Cloud Functions cannot be deployed from the Firebase Console,
+# and both Cloud Shell (blocked by Workspace policy) and a local CLI were off
+# the table. The firebase CLI still runs — it just runs here, on GitHub's
+# machines, so deploying is a click rather than a terminal session.
+#
+# Run it: repo → Actions → "Deploy Cloud Functions" → Run workflow.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT      full JSON of a service account key
+#   STRIPE_SECRET_KEY             sk_test_... / sk_live_...
+#   STRIPE_WEBHOOK_SECRET         whsec_... (leave empty on the first run)
+#   STRIPE_PLATFORM_ACCOUNT_ID    acct_...
+#   FACTURAPI_API_KEY             sk_test_... / sk_live_...
+#   FACTURAPI_SERVITEC_ORG_ID     FacturAPI parent organization id
+#
+# Deliberately manual (workflow_dispatch only). Deploying on every push to main
+# would ship half-finished work to a live payment system.
+
+name: Deploy Cloud Functions
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Limit the deploy, e.g. functions:onPaymentSucceededStripeWebhook. Leave as "functions" to deploy all.'
+        required: false
+        default: 'functions'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: functions
+        run: npm run build
+
+      - name: Write functions/.env from repository secrets
+        # The Firebase CLI reads this file and uploads each value as a runtime
+        # environment variable on the deployed functions. It is created here and
+        # discarded with the runner — never committed.
+        run: |
+          cat > functions/.env <<EOF
+          STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PLATFORM_ACCOUNT_ID=${{ secrets.STRIPE_PLATFORM_ACCOUNT_ID }}
+          FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
+          FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
+          PLATFORM_COMMISSION_PCT=12
+          EOF
+
+      - name: Fail early if the Stripe key is missing
+        # Without this the deploy "succeeds" and every payment fails at runtime,
+        # which is a much more confusing thing to debug.
+        run: |
+          if ! grep -q '^STRIPE_SECRET_KEY=sk_' functions/.env; then
+            echo "::error::STRIPE_SECRET_KEY secret is missing or malformed."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          if ! grep -q '^FACTURAPI_API_KEY=sk_' functions/.env; then
+            echo "::error::FACTURAPI_API_KEY secret is missing or malformed."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/gcp-key.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
+
+      - name: Deploy
+        # --force auto-confirms deleting the three legacy placeholder functions
+        # (sendAdvancedNotification, generateMonthlyReport, cleanupExpiredServices)
+        # that the old servitec_app/functions codebase left behind. There is no
+        # prompt to answer on a runner.
+        run: |
+          npx firebase-tools@15 deploy \
+            --only "${{ inputs.only }}" \
+            --project servicios-domicilio-mvp \
+            --non-interactive \
+            --force
+
+      - name: Show the deployed function URLs
+        if: success()
+        run: |
+          npx firebase-tools@15 functions:list \
+            --project servicios-domicilio-mvp || true
+          echo "----------------------------------------------------------------"
+          echo "Stripe webhook endpoint to register in the Stripe dashboard:"
+          echo "https://us-central1-servicios-domicilio-mvp.cloudfunctions.net/onPaymentSucceededStripeWebhook"
+
+      - name: Remove credentials
+        if: always()
+        run: rm -f "$RUNNER_TEMP/gcp-key.json" functions/.env
