@@ -167,5 +167,7 @@ Fast smoke:
 - **"Multiple capabilities paused"** banner in Stripe dashboard: normal for sandbox, doesn't block anything.
 - **Push notifications don't arrive**: check `users/{uid}.fcmToken` in Firestore — if empty, the app didn't call `saveTokenToUser` (check auth_repository log output).
 - **CFDI never emitted after payment**: check Cloud Functions logs (`firebase functions:log --only onPaymentSucceededStripeWebhook`) — likely the técnico's `facturapi.organizationApiKey` is missing (they haven't finished fiscal onboarding).
-- **Firestore index errors** in console output: click the URL Firestore prints, it builds the index in 5–10 min.
+- **Firestore index errors** in console output: every index the app and the functions currently need is declared in `firestore.indexes.json` and deployed in step 2, so this should not happen — but indexes take 5–10 minutes to *build* after deploy, and queries fail until they finish. If you see one for a query we missed, click the URL Firestore prints (it builds in 5–10 min) and add the same index to `firestore.indexes.json` so it isn't lost on the next environment.
+
+  Note that Cloud Functions get no such URL — a missing index there just fails in `firebase functions:log`. The three that matter are `users(rol, disponible, activo, especialidades)` for auto-assignment, `users(rol, graciaExpiraAt)` for the grace-period cron, and `servicios(tecnicoId, estado, paidAt)` for the commission cron.
 - **Stripe webhook 400 errors**: usually a `STRIPE_WEBHOOK_SECRET` mismatch. Re-copy from dashboard and re-deploy.
