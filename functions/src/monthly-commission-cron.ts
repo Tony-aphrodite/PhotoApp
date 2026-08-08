@@ -19,6 +19,14 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from './lib/admin';
 import { facturapiParent } from './lib/facturapi';
 import { platformCommissionPct } from './lib/stripe';
+import { renderBrandedCfdiPdf } from './lib/pdf';
+import { uploadCfdiXml, uploadCfdiPdf } from './lib/storage';
+import {
+  downloadAsBuffer,
+  extractXmlAttr,
+  extractNodeAttr,
+  buildCadenaOriginalTfd,
+} from './lib/cfdi-xml';
 
 export const monthlyCommissionCron = onSchedule(
   {
@@ -100,18 +108,102 @@ export const monthlyCommissionCron = onSchedule(
         use: 'G03',
       });
 
-      await db.collection('facturas').add({
+      // Reserve the doc id up front so the XML and PDF land on predictable
+      // Storage paths (facturas/{id}.xml / .pdf), matching storage.rules.
+      const facturaRef = db.collection('facturas').doc();
+      const facturaId = facturaRef.id;
+
+      const totalConIva = +subtotal.toFixed(2);
+      const subtotalSinIva = +(subtotal / 1.16).toFixed(2);
+      const ivaAmount = +(subtotal - subtotal / 1.16).toFixed(2);
+
+      // Download the stamped XML, render the branded PDF, upload both. A
+      // failure here must not lose the invoice row — the CFDI is already
+      // stamped at the SAT, so we persist metadata with null URLs and flag it
+      // for an admin to regenerate.
+      let xmlUrl: string | null = null;
+      let pdfUrl: string | null = null;
+      let fechaTimbrado = new Date();
+
+      try {
+        const xmlBuf = await downloadAsBuffer(
+          await fxParent.invoices.downloadXml(invoice.id),
+        );
+        xmlUrl = await uploadCfdiXml(facturaId, xmlBuf);
+
+        const xmlText = xmlBuf.toString('utf8');
+        const stamp = extractXmlAttr(xmlText, 'FechaTimbrado');
+        if (stamp && !Number.isNaN(new Date(stamp).getTime())) {
+          fechaTimbrado = new Date(stamp);
+        }
+
+        const noCertSat = extractXmlAttr(xmlText, 'NoCertificadoSAT') ?? '';
+
+        // Emisor here is ServiTec, not the técnico. Read it straight from the
+        // stamped XML rather than from config — the SAT copy is authoritative
+        // and needs no extra env vars. CFDI orders Emisor before Receptor, so
+        // node-scoped reads keep the two apart.
+        const pdfBuf = await renderBrandedCfdiPdf({
+          folioFiscal: invoice.uuid,
+          fechaTimbrado: stamp ?? fechaTimbrado.toISOString(),
+          emisor: {
+            rfc: extractNodeAttr(xmlText, 'Emisor', 'Rfc') ?? '',
+            razonSocial:
+              extractNodeAttr(xmlText, 'Emisor', 'Nombre') ?? 'ServiTec',
+            regimenFiscal:
+              extractNodeAttr(xmlText, 'Emisor', 'RegimenFiscal') ?? '',
+          },
+          receptor: {
+            rfc: (tecnico.rfc as string) ?? '',
+            razonSocial:
+              (tecnico.razonSocial as string) ??
+              `${tecnico.nombre ?? ''} ${tecnico.apellido ?? ''}`.trim(),
+            usoCfdi: 'G03',
+          },
+          items: items.map((it) => ({
+            description: it.product.description,
+            quantity: it.quantity,
+            unitPrice: it.product.price,
+            subtotal: it.quantity * it.product.price,
+          })),
+          subtotal: subtotalSinIva,
+          iva: ivaAmount,
+          total: totalConIva,
+          selloEmisor: extractXmlAttr(xmlText, 'Sello') ?? '',
+          selloSat:
+            (extractXmlAttr(xmlText, 'SelloSAT') ?? '') +
+            (noCertSat ? ` (Cert ${noCertSat})` : ''),
+          cadenaOriginalTfd: buildCadenaOriginalTfd(xmlText),
+        });
+        pdfUrl = await uploadCfdiPdf(facturaId, pdfBuf);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(
+          `Commission CFDI artifacts failed for ${tecnicoUid} ${periodo}`,
+          err,
+        );
+        await db.collection('admin_flags').add({
+          type: 'commission_cfdi_artifact_generation_failed',
+          tecnicoUid,
+          periodo,
+          facturapiInvoiceId: invoice.id,
+          error: (err as Error).message,
+          createdAt: new Date(),
+        });
+      }
+
+      await facturaRef.set({
         tipo: 'servitec_comision',
         tecnicoUid,
         periodo,
         facturapiInvoiceId: invoice.id,
         folioFiscal: invoice.uuid,
-        fechaTimbrado: new Date(),
-        subtotal: +(subtotal / 1.16).toFixed(2),
-        iva: +(subtotal - subtotal / 1.16).toFixed(2),
-        total: +subtotal.toFixed(2),
-        xmlUrl: null,
-        pdfUrl: null,
+        fechaTimbrado,
+        subtotal: subtotalSinIva,
+        iva: ivaAmount,
+        total: totalConIva,
+        xmlUrl,
+        pdfUrl,
         estado: 'vigente',
         createdAt: new Date(),
       });

@@ -22,5 +22,6 @@ export {
 } from './stripe-connect-onboarding';
 export { onPaymentSucceededStripeWebhook } from './on-payment-succeeded';
 export { onChatMessageCreated } from './chat-message-guard';
+export { onServiceCreated } from './service-lifecycle';
 export { monthlyCommissionCron } from './monthly-commission-cron';
 export { gracePeriodDailyCron } from './grace-period-cron';

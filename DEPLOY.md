@@ -78,15 +78,23 @@ firebase deploy --only firestore:rules,firestore:indexes
 firebase deploy --only functions
 ```
 
-**Expected outcome:** 8 functions deployed:
+**Expected outcome:** 9 functions deployed:
 - `setupTechnicianFiscal` (callable)
 - `createPaymentIntent` (HTTPS)
 - `createTechnicianConnectOnboardingLink` (callable)
 - `getTechnicianConnectStatus` (callable)
 - `onPaymentSucceededStripeWebhook` (HTTPS)
 - `onChatMessageCreated` (Firestore trigger)
+- `onServiceCreated` (Firestore trigger)
 - `monthlyCommissionCron` (scheduler)
 - `gracePeriodDailyCron` (scheduler)
+
+This codebase replaces the legacy `servitec_app/functions/` — `firebase.json`
+points only here, both under codebase `default`. The deploy therefore *deletes*
+the old `sendAdvancedNotification`, `generateMonthlyReport` and
+`cleanupExpiredServices` from the project. All three were unimplemented
+placeholders, so nothing is lost; the CLI will still prompt to confirm the
+deletions.
 
 **Copy the deployed URL for `onPaymentSucceededStripeWebhook`** — you need it for step 4. Should look like:
 ```

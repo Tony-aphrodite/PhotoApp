@@ -29,6 +29,11 @@ import { stripe } from './lib/stripe';
 import { facturapiForOrg } from './lib/facturapi';
 import { renderBrandedCfdiPdf } from './lib/pdf';
 import { uploadCfdiXml, uploadCfdiPdf } from './lib/storage';
+import {
+  downloadAsBuffer,
+  extractXmlAttr,
+  buildCadenaOriginalTfd,
+} from './lib/cfdi-xml';
 
 export const onPaymentSucceededStripeWebhook = onRequest(
   { region: 'us-central1', memory: '512MiB' },
@@ -293,46 +298,5 @@ export const onPaymentSucceededStripeWebhook = onRequest(
   },
 );
 
-// ---- helpers ----
-
-/** Normalize FacturAPI's `BinaryDownload` (which could be a Buffer, Blob,
- * or ReadableStream depending on the SDK internals) into a Buffer. */
-async function downloadAsBuffer(payload: unknown): Promise<Buffer> {
-  if (Buffer.isBuffer(payload)) return payload;
-  // Blob (Web API) — modern SDK versions wrap responses this way.
-  if (payload && typeof (payload as any).arrayBuffer === 'function') {
-    const ab = await (payload as any).arrayBuffer();
-    return Buffer.from(ab);
-  }
-  // Node stream
-  if (payload && typeof (payload as any).on === 'function') {
-    const chunks: Buffer[] = [];
-    for await (const chunk of payload as any) chunks.push(Buffer.from(chunk));
-    return Buffer.concat(chunks);
-  }
-  // Fallback: assume string / already-buffer-like
-  return Buffer.from(payload as any);
-}
-
-/** Extract a top-level attribute value from a CFDI XML by name (simple regex,
- * no XML parser). Handles `Attr="value"` on any node. */
-function extractXmlAttr(xml: string, attrName: string): string | null {
-  const re = new RegExp(`${attrName}\\s*=\\s*"([^"]*)"`);
-  const m = xml.match(re);
-  return m ? m[1] : null;
-}
-
-/** Reconstruct the "cadena original TFD" from the TimbreFiscalDigital node.
- * SAT format: `||{version}|{UUID}|{FechaTimbrado}|{RfcProvCertif}|{SelloCFD}|{NoCertificadoSAT}||`
- * (subset — SelloSAT is NOT part of the cadena; used only for verification.)
- */
-function buildCadenaOriginalTfd(xml: string): string {
-  const version = extractXmlAttr(xml, 'Version') ?? '1.1';
-  const uuid = extractXmlAttr(xml, 'UUID') ?? '';
-  const fecha = extractXmlAttr(xml, 'FechaTimbrado') ?? '';
-  const rfcPac = extractXmlAttr(xml, 'RfcProvCertif') ?? '';
-  const selloCfd = extractXmlAttr(xml, 'SelloCFD') ??
-      extractXmlAttr(xml, 'Sello') ?? '';
-  const noCertSat = extractXmlAttr(xml, 'NoCertificadoSAT') ?? '';
-  return `||${version}|${uuid}|${fecha}|${rfcPac}|${selloCfd}|${noCertSat}||`;
-}
+// XML helpers now live in ./lib/cfdi-xml — the monthly commission cron needs
+// the same readers.

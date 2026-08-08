@@ -75,18 +75,20 @@ Expected time: **30–45 minutes** for the full happy-path plus a handful of edg
 3. Submit.
 
 **Expected**:
-- Service appears in "Mis Servicios" as **Pendiente**.
+- Service appears in "Mis Servicios" as **Pendiente**, then flips to **Asignado** within a second or two — `onServiceCreated` auto-assigns whenever `tipoAsignacion` is `automatica` (the default), scoring técnicos on rating, current workload, distance and experience.
 - In Firestore, `servicios/{id}` was created with `clienteTelefono` **empty**, and `servicios/{id}/private/contact` was created with the real phone.
+- If no técnico has the matching specialty, the service stays **Pendiente**, every admin gets a "Sin técnicos disponibles" push, and a `no_technician_available` entry lands in `admin_flags/`.
 
 ---
 
 ## Test 4 — Assignment + push notifications
 
-**Admin path** (if you set up an admin):
+If Test 3 auto-assigned already, that *is* this test — skip to the expectations below.
+
+**To exercise manual assignment instead**, set `tipoAsignacion: "manual"` on the service document in the Firestore Console before a técnico is picked, or create the service and immediately clear `tecnicoId`. Then:
 1. On admin device, open Dashboard, tap the pending service, tap **"Asignar Tecnico"**, pick the técnico from the list.
 
-**Or self-assign path** (técnico taps the service):
-- Depends on your app's technician acceptance flow.
+With `manual`, nobody is auto-assigned: admins get a "Nuevo servicio pendiente" push and every matching técnico gets "Nuevo servicio disponible".
 
 **Expected**:
 - Cliente device receives a push: *"ServiTec — Técnico asignado: {Nombre}"*.
@@ -190,7 +192,7 @@ For each broken step:
 ## Known limitations of this test build
 
 - **The red "Multiple capabilities paused" banner** in Stripe dashboard is expected in sandbox and doesn't affect functionality.
-- **CFDI PDFs are not yet branded** — you'll see the FacturAPI default PDF template. The branded ServiTec PDF generator is written but not yet wired to the invoice-creation flow.
+- **CFDI PDFs are branded now** — both the service CFDI and the monthly commission CFDI render the ServiTec template and upload to Storage as `facturas/{facturaId}.pdf`, alongside the signed XML. The URLs land on the `facturas` document (`pdfUrl` / `xmlUrl`), but **no app screen links to them yet** — check them from the Firestore Console for this build.
 - **Monthly commission CFDI cron** is deployed but won't run until the 1st of next month. To test manually: `firebase functions:shell` → `monthlyCommissionCron()`.
 - **iOS build not verified** — this checklist assumes Android.
 - **Marketing SDKs (AppsFlyer/Adjust/Singular) not integrated** — waiting on marketing agency's choice.
