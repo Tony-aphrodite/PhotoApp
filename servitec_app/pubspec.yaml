@@ -32,6 +32,8 @@ dependencies:
   cloud_firestore: ^5.6.5
   firebase_storage: ^12.4.4
   firebase_messaging: ^15.2.4
+  firebase_analytics: ^11.4.0
+  cloud_functions: ^5.2.4
 
   # Maps & Location
   google_maps_flutter: ^2.12.1
@@ -43,6 +45,9 @@ dependencies:
   image_cropper: ^9.0.0
   flutter_image_compress: ^2.3.0
   uuid: ^4.5.1
+
+  # File picking (for CSD .cer/.key uploads during fiscal onboarding)
+  file_picker: ^8.1.4
 
   # Payments
   flutter_stripe: ^11.4.0

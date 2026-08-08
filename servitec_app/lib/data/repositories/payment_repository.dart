@@ -17,9 +17,10 @@ class PaymentRepository {
   CollectionReference get _transactionsRef =>
       _firestore.collection(AppConstants.transactionsCollection);
 
-  /// Create a PaymentIntent via Cloud Function
-  /// Returns the client secret for Stripe
-  Future<String> createPaymentIntent({
+  /// Create a PaymentIntent via Cloud Function. Returns both the `clientSecret`
+  /// (used to present Stripe's PaymentSheet) and the `paymentIntentId` (used
+  /// as the idempotency key for the transaction document — see [recordPayment]).
+  Future<PaymentIntentCreation> createPaymentIntent({
     required String servicioId,
     required double amount,
     required String currency,
@@ -38,8 +39,11 @@ class PaymentRepository {
       throw Exception('Failed to create payment intent: ${response.body}');
     }
 
-    final data = jsonDecode(response.body);
-    return data['clientSecret'] as String;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return PaymentIntentCreation(
+      clientSecret: data['clientSecret'] as String,
+      paymentIntentId: data['paymentIntentId'] as String,
+    );
   }
 
   /// Calculate commission breakdown
@@ -261,7 +265,16 @@ class PaymentRepository {
     });
   }
 
-  /// Record a completed payment (normally done by Cloud Function webhook)
+  /// Optimistic client-side write after Stripe confirms the payment.
+  ///
+  /// The `stripePaymentIntentId` is REQUIRED and doubles as the transaction
+  /// document id — this makes the write idempotent so that the Cloud Function
+  /// webhook's authoritative write (from `on-payment-succeeded`) converges to
+  /// the same document rather than creating a duplicate row.
+  ///
+  /// The webhook is the source of truth; this client write just gives the UI
+  /// instant feedback (the earnings screen shows the transaction right away
+  /// instead of waiting for Stripe → webhook → Firestore propagation).
   Future<void> recordPayment({
     required String servicioId,
     required String clienteId,
@@ -270,42 +283,63 @@ class PaymentRepository {
     required double comisionPlataforma,
     required double comisionStripe,
     required double montoTecnico,
-    String? stripePaymentIntentId,
+    required String stripePaymentIntentId,
   }) async {
     final batch = _firestore.batch();
 
-    // Create transaction record
-    final txRef = _transactionsRef.doc();
-    batch.set(txRef, {
-      'servicioId': servicioId,
-      'clienteId': clienteId,
-      'tecnicoId': tecnicoId,
-      'montoTotal': montoTotal,
-      'comisionPlataforma': comisionPlataforma,
-      'comisionStripe': comisionStripe,
-      'montoTecnico': montoTecnico,
-      'stripePaymentIntentId': stripePaymentIntentId,
-      'estado': 'completado',
-      'createdAt': Timestamp.now(),
-      'completedAt': Timestamp.now(),
-    });
+    // Transaction — keyed by PaymentIntent id (idempotent with webhook).
+    final txRef = _transactionsRef.doc(stripePaymentIntentId);
+    batch.set(
+      txRef,
+      {
+        'servicioId': servicioId,
+        'clienteId': clienteId,
+        'tecnicoId': tecnicoId,
+        'montoTotal': montoTotal,
+        'comisionPlataforma': comisionPlataforma,
+        'comisionStripe': comisionStripe,
+        'montoTecnico': montoTecnico,
+        'stripePaymentIntentId': stripePaymentIntentId,
+        'estado': 'completado',
+        'createdAt': Timestamp.now(),
+        'completedAt': Timestamp.now(),
+      },
+      SetOptions(merge: true),
+    );
 
-    // Update service
+    // Service — the webhook will also stamp this, but doing it here gives
+    // the UI an immediate transition. `merge` avoids clobbering any fields
+    // the webhook may have set first.
     final serviceRef = _firestore
         .collection(AppConstants.servicesCollection)
         .doc(servicioId);
-    batch.update(serviceRef, {
-      'estado': AppConstants.statusPaid,
-      'montoPagado': montoTotal,
-      'comisionPlataforma': comisionPlataforma,
-      'montoTecnico': montoTecnico,
-      'estadoPago': 'pagado',
-      'stripePaymentIntentId': stripePaymentIntentId,
-      'updatedAt': Timestamp.now(),
-    });
+    batch.set(
+      serviceRef,
+      {
+        'estado': AppConstants.statusPaid,
+        'montoPagado': montoTotal,
+        'comisionPlataforma': comisionPlataforma,
+        'montoTecnico': montoTecnico,
+        'estadoPago': 'pagado',
+        'stripePaymentIntentId': stripePaymentIntentId,
+        'updatedAt': Timestamp.now(),
+      },
+      SetOptions(merge: true),
+    );
 
     await batch.commit();
   }
+}
+
+/// Result of [PaymentRepository.createPaymentIntent].
+class PaymentIntentCreation {
+  final String clientSecret;
+  final String paymentIntentId;
+
+  const PaymentIntentCreation({
+    required this.clientSecret,
+    required this.paymentIntentId,
+  });
 }
 
 enum EarningPeriod { week, month, year, all }

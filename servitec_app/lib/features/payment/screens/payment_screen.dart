@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
+import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/service_model.dart';
@@ -44,7 +45,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final amount = service.costoFinal ?? service.estimacionCosto ?? 0;
       final breakdown = paymentRepo.calculateCommission(
         montoTotal: amount,
-        porcentajePlataforma: comisionConfig['porcentajePlataforma'] ?? 15.0,
+        // Must match the server-side PLATFORM_COMMISSION_PCT env var
+        // (functions/src/lib/stripe.ts). If they diverge, the UI shows the
+        // client a different commission than what Stripe actually charges.
+        // Single source of truth = the `configuracion/comision` Firestore
+        // document; fallback matches the server default (12%).
+        porcentajePlataforma: comisionConfig['porcentajePlataforma'] ?? 12.0,
       );
 
       if (mounted) {
@@ -75,7 +81,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final paymentRepo = context.read<PaymentRepository>();
 
       // 1. Create PaymentIntent via Cloud Function
-      final clientSecret = await paymentRepo.createPaymentIntent(
+      final pi = await paymentRepo.createPaymentIntent(
         servicioId: _service!.id,
         amount: _breakdown!.montoTotal,
         currency: 'mxn',
@@ -84,7 +90,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
       // 2. Initialize payment sheet
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
+          paymentIntentClientSecret: pi.clientSecret,
           merchantDisplayName: 'ServiTec',
           style: ThemeMode.system,
         ),
@@ -93,7 +99,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
       // 3. Present payment sheet
       await Stripe.instance.presentPaymentSheet();
 
-      // 4. Payment succeeded - record transaction
+      // 4. Optimistic client-side record (idempotent via PaymentIntent id).
+      //    The webhook is the source of truth; this just gives the UI instant
+      //    feedback before Stripe → webhook → Firestore propagation completes.
       await paymentRepo.recordPayment(
         servicioId: _service!.id,
         clienteId: _service!.clienteId,
@@ -102,6 +110,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         comisionPlataforma: _breakdown!.comisionPlataforma,
         comisionStripe: _breakdown!.comisionStripe,
         montoTecnico: _breakdown!.montoTecnico,
+        stripePaymentIntentId: pi.paymentIntentId,
       );
 
       // 5. Narrate the payment in the service chat thread.
@@ -117,6 +126,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
               },
             );
       }
+
+      // 6. Analytics — GA4 built-in purchase event (reports as revenue and
+      //    integrates with any MMP that maps from Firebase Analytics).
+      await AnalyticsService.logPurchase(
+        servicioId: _service!.id,
+        amount: _breakdown!.montoTotal,
+        platformCommission: _breakdown!.comisionPlataforma,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

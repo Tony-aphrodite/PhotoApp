@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../features/auth/bloc/auth_bloc.dart';
 import '../../features/auth/bloc/auth_state.dart';
 import '../theme/app_theme.dart';
+import 'onboarding_disclosure_dialog.dart';
 
 class AppShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -16,6 +17,15 @@ class AppShell extends StatelessWidget {
     final authState = context.watch<AuthBloc>().state;
     if (authState is! AuthAuthenticated) return const SizedBox();
     final user = authState.user;
+
+    // First-launch: show the off-platform disclosure once per user. The
+    // helper is a no-op if the user has already accepted, and its Firestore
+    // write triggers a UserModel refresh so subsequent builds skip the check.
+    OnboardingDisclosureDialog.maybeShow(
+      context: context,
+      uid: user.uid,
+      alreadyAccepted: user.disclosureAcceptedAt != null,
+    );
 
     List<_NavItem> items;
 

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/service_card.dart';
@@ -66,6 +67,16 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                 if (total != null) 'total': total,
               },
             );
+      }
+
+      // Analytics — funnel step from cliente side.
+      if (response == 'aprobada') {
+        await AnalyticsService.logQuotationApproved(
+          servicioId: servicioId,
+          total: total ?? 0,
+        );
+      } else {
+        await AnalyticsService.logQuotationRejected(servicioId: servicioId);
       }
     }
 

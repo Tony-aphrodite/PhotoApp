@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+import 'facturapi_ref.dart';
+
 class UserModel extends Equatable {
   final String uid;
   final String email;
@@ -29,6 +31,18 @@ class UserModel extends Equatable {
   // FCM token for push notifications
   final String? fcmToken;
 
+  // Technician fiscal / CFDI fields — Phase 2 (see project_servitec_fiscal_model)
+  final String? rfc;
+  final String? razonSocial;
+  final String? regimenFiscal; // SAT code, e.g. "626" (RESICO), "612" (Actividad Empresarial)
+  final String? codigoPostalFiscal;
+  final FacturapiRef? facturapi;
+  final DateTime? graciaExpiraAt;
+
+  /// Timestamp when the user acknowledged the off-platform disclosure modal
+  /// shown once on first authenticated launch. Null = has not seen it yet.
+  final DateTime? disclosureAcceptedAt;
+
   const UserModel({
     required this.uid,
     required this.email,
@@ -50,6 +64,13 @@ class UserModel extends Equatable {
     this.ultimaAsignacion,
     this.stripeConnectAccountId,
     this.fcmToken,
+    this.rfc,
+    this.razonSocial,
+    this.regimenFiscal,
+    this.codigoPostalFiscal,
+    this.facturapi,
+    this.graciaExpiraAt,
+    this.disclosureAcceptedAt,
   });
 
   bool get isClient => rol == 'cliente';
@@ -97,6 +118,16 @@ class UserModel extends Equatable {
           (data['ultimaAsignacion'] as Timestamp?)?.toDate(),
       stripeConnectAccountId: data['stripeConnectAccountId'] as String?,
       fcmToken: data['fcmToken'] as String?,
+      rfc: data['rfc'] as String?,
+      razonSocial: data['razonSocial'] as String?,
+      regimenFiscal: data['regimenFiscal'] as String?,
+      codigoPostalFiscal: data['codigoPostalFiscal'] as String?,
+      facturapi: data['facturapi'] != null
+          ? FacturapiRef.fromMap(Map<String, dynamic>.from(data['facturapi'] as Map))
+          : null,
+      graciaExpiraAt: (data['graciaExpiraAt'] as Timestamp?)?.toDate(),
+      disclosureAcceptedAt:
+          (data['disclosureAcceptedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -133,6 +164,30 @@ class UserModel extends Equatable {
 
     if (fcmToken != null) map['fcmToken'] = fcmToken;
 
+    // Fiscal fields — both técnicos and clientes may have these:
+    //   - Técnicos: required to emit CFDIs (they're the emisor).
+    //   - Clientes: optional. If absent, CFDI receptor defaults to
+    //     "público en general" (RFC XAXX010101000, régimen 616) in the
+    //     Cloud Function that stamps the CFDI.
+    if (rfc != null) map['rfc'] = rfc;
+    if (razonSocial != null) map['razonSocial'] = razonSocial;
+    if (regimenFiscal != null) map['regimenFiscal'] = regimenFiscal;
+    if (codigoPostalFiscal != null) {
+      map['codigoPostalFiscal'] = codigoPostalFiscal;
+    }
+    // FacturAPI org + grace period are técnico-only (they're the emisor
+    // machinery).
+    if (rol == 'tecnico') {
+      if (facturapi != null) map['facturapi'] = facturapi!.toMap();
+      if (graciaExpiraAt != null) {
+        map['graciaExpiraAt'] = Timestamp.fromDate(graciaExpiraAt!);
+      }
+    }
+
+    if (disclosureAcceptedAt != null) {
+      map['disclosureAcceptedAt'] = Timestamp.fromDate(disclosureAcceptedAt!);
+    }
+
     return map;
   }
 
@@ -157,6 +212,13 @@ class UserModel extends Equatable {
     DateTime? ultimaAsignacion,
     String? stripeConnectAccountId,
     String? fcmToken,
+    String? rfc,
+    String? razonSocial,
+    String? regimenFiscal,
+    String? codigoPostalFiscal,
+    FacturapiRef? facturapi,
+    DateTime? graciaExpiraAt,
+    DateTime? disclosureAcceptedAt,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -181,6 +243,14 @@ class UserModel extends Equatable {
       stripeConnectAccountId:
           stripeConnectAccountId ?? this.stripeConnectAccountId,
       fcmToken: fcmToken ?? this.fcmToken,
+      rfc: rfc ?? this.rfc,
+      razonSocial: razonSocial ?? this.razonSocial,
+      regimenFiscal: regimenFiscal ?? this.regimenFiscal,
+      codigoPostalFiscal: codigoPostalFiscal ?? this.codigoPostalFiscal,
+      facturapi: facturapi ?? this.facturapi,
+      graciaExpiraAt: graciaExpiraAt ?? this.graciaExpiraAt,
+      disclosureAcceptedAt:
+          disclosureAcceptedAt ?? this.disclosureAcceptedAt,
     );
   }
 
@@ -191,5 +261,7 @@ class UserModel extends Equatable {
         calificacionPromedio, totalResenas, tarifasPorEspecialidad,
         disponible, horarioDisponible, serviciosCompletados,
         ultimaAsignacion, stripeConnectAccountId, fcmToken,
+        rfc, razonSocial, regimenFiscal, codigoPostalFiscal,
+        facturapi, graciaExpiraAt, disclosureAcceptedAt,
       ];
 }

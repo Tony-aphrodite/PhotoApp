@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/quotation_model.dart';
@@ -130,6 +131,12 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
               },
             );
       }
+
+      // Analytics — funnel step from técnico side.
+      await AnalyticsService.logQuotationSent(
+        servicioId: widget.serviceId,
+        total: _total,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

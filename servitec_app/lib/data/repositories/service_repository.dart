@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/service_model.dart';
+import '../models/service_private_contact.dart';
 import '../models/message_model.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/analytics_service.dart';
 import '../../core/utils/service_state_machine.dart';
 
 class ServiceRepository {
@@ -13,10 +15,50 @@ class ServiceRepository {
   CollectionReference get _servicesRef =>
       _firestore.collection(AppConstants.servicesCollection);
 
-  // Create service
+  // Create service. The public service body (`servicios/{id}`) is created
+  // WITHOUT the client's phone — that lives in `servicios/{id}/private/contact`
+  // and is gated by security rules keyed off `estado` (see firestore.rules).
+  // This makes the phone unavailable via direct Firestore access until the
+  // service reaches en_progreso/completado/pagado.
   Future<ServiceModel> createService(ServiceModel service) async {
-    final docRef = await _servicesRef.add(service.toFirestore());
+    // Write the public body with `clienteTelefono` blanked so nothing sensitive
+    // leaks even if rules are misconfigured.
+    final publicBody = service.copyWith(clienteTelefono: '');
+    final docRef = await _servicesRef.add(publicBody.toFirestore());
+
+    // Write the private contact subdoc.
+    if (service.clienteTelefono.isNotEmpty) {
+      await docRef
+          .collection('private')
+          .doc('contact')
+          .set(ServicePrivateContact(
+            telefonoCliente: service.clienteTelefono,
+          ).toFirestore());
+    }
+
+    // Analytics — top-of-funnel event for the marketing team.
+    await AnalyticsService.logServiceRequested(
+      servicioId: docRef.id,
+      categoria: service.categoria,
+      urgencia: service.urgencia,
+      estimacionCosto: service.estimacionCosto,
+    );
     return service.copyWith(id: docRef.id);
+  }
+
+  /// Stream the private contact subdoc for a service. Firestore rules only
+  /// allow reads when the requester is admin OR the assigned técnico AND the
+  /// service status warrants revealing the phone. If unauthorized, the stream
+  /// emits `null` (permission denied is silently swallowed).
+  Stream<ServicePrivateContact?> streamServicePrivateContact(String serviceId) {
+    return _servicesRef
+        .doc(serviceId)
+        .collection('private')
+        .doc('contact')
+        .snapshots()
+        .map((snap) =>
+            snap.exists ? ServicePrivateContact.fromFirestore(snap) : null)
+        .handleError((_) => null);
   }
 
   // Get service by ID
@@ -188,6 +230,19 @@ class ServiceRepository {
         metadata: {'event': 'status_change', 'estado': newStatus},
       );
     }
+
+    // Analytics — funnel milestones for the marketing team.
+    switch (newStatus) {
+      case AppConstants.statusInProgress:
+        await AnalyticsService.logServiceStarted(servicioId: serviceId);
+        break;
+      case AppConstants.statusCompleted:
+        await AnalyticsService.logServiceCompleted(servicioId: serviceId);
+        break;
+      case AppConstants.statusCancelled:
+        await AnalyticsService.logServiceCancelled(servicioId: serviceId);
+        break;
+    }
   }
 
   // Assign technician to service
@@ -214,6 +269,11 @@ class ServiceRepository {
         'tecnicoId': technicianId,
         'tipoAsignacion': assignmentType,
       },
+    );
+
+    await AnalyticsService.logTechnicianAssigned(
+      servicioId: serviceId,
+      tipoAsignacion: assignmentType,
     );
   }
 

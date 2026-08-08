@@ -10,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/phone_visibility.dart';
 import '../../../core/widgets/status_badge.dart';
+import '../../../data/models/service_private_contact.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
@@ -451,21 +452,32 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                         ),
                       ],
 
-                      // Client Card
+                      // Client Card. The phone is stored in a private subdoc
+                      // (servicios/{id}/private/contact) with status-gated read
+                      // rules — we surface it via a stream that returns null
+                      // when the caller isn't authorized yet.
                       if (!isClient) ...[
                         const SizedBox(height: 16),
-                        _PremiumPersonCard(
-                          title: 'Cliente',
-                          name: service.clienteNombre,
-                          subtitle: PhoneVisibility.display(
-                              service.clienteTelefono, service.estado),
-                          iconColor: AppTheme.secondaryColor,
-                          gradientColors: const [
-                            Color(0xFF14BDAC),
-                            Color(0xFF69F0AE),
-                          ],
-                          onMessageTap: () =>
-                              context.push('/chat/${service.id}'),
+                        StreamBuilder<ServicePrivateContact?>(
+                          stream: context
+                              .read<ServiceRepository>()
+                              .streamServicePrivateContact(service.id),
+                          builder: (context, snap) {
+                            final phone = snap.data?.telefonoCliente ?? '';
+                            return _PremiumPersonCard(
+                              title: 'Cliente',
+                              name: service.clienteNombre,
+                              subtitle:
+                                  PhoneVisibility.display(phone, service.estado),
+                              iconColor: AppTheme.secondaryColor,
+                              gradientColors: const [
+                                Color(0xFF14BDAC),
+                                Color(0xFF69F0AE),
+                              ],
+                              onMessageTap: () =>
+                                  context.push('/chat/${service.id}'),
+                            );
+                          },
                         ),
                       ],
 

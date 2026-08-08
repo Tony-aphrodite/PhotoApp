@@ -42,11 +42,21 @@ service cloud.firestore {
       allow create: if isAuthenticated();
 
       // Actualización: propio perfil o admin
-      // No se permite cambiar el rol ni campos calculados por Cloud Functions
+      // Campos calculados por Cloud Functions (rating, servicios completados,
+      // estado de facturación y organization de FacturAPI, graciaExpiraAt) no se
+      // pueden modificar desde el cliente ni por el propio usuario.
       allow update: if isAuthenticated() && (
         request.auth.uid == userId || isAdmin()
       ) && !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['rol', 'calificacionPromedio', 'totalResenas', 'serviciosCompletados']);
+          .hasAny([
+            'rol',
+            'calificacionPromedio',
+            'totalResenas',
+            'serviciosCompletados',
+            'facturapi',
+            'graciaExpiraAt',
+            'stripeConnectAccountId'
+          ]);
 
       allow delete: if isAdmin();
     }
@@ -82,6 +92,35 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+
+      // Subcollection: private
+      // Sensitive contact details (client phone) live here so we can gate
+      // reads on service status. UI only calls these once the técnico is
+      // actually on-site or the service has been paid.
+      match /private/{doc} {
+        allow read: if isAuthenticated() && (
+          isAdmin() ||
+          // Cliente owner can always read their own contact info
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
+          // Técnico assigned to the service can read once we're past the quotation phase
+          (isTecnico() &&
+           get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid &&
+           get(/databases/$(database)/documents/servicios/$(servicioId)).data.estado in
+             ['en_progreso', 'completado', 'pago_pendiente', 'pagado'])
+        );
+
+        // Only the cliente owner (or admin) can create/update the private
+        // contact subdoc — same policy as writing to the parent service.
+        allow create: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid
+        );
+        allow update: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid
+        );
+        allow delete: if isAdmin();
+      }
 
       // Subcollection: mensajes
       match /mensajes/{mensajeId} {
@@ -205,6 +244,36 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+    }
+
+    // ===== TARIFAS COLLECTION =====
+    // Admin-managed pricing table read by all authenticated users so the app
+    // can show baseline rates. Writes are locked to admin.
+    match /tarifas/{tarifaId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== FACTURAS COLLECTION (CFDI records) =====
+    // Row per stamped CFDI. Created/updated ONLY by Cloud Functions
+    // (invoice stamping + monthly commission cron). Client apps only read.
+    match /facturas/{facturaId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.tecnicoUid == request.auth.uid ||
+        resource.data.get('clienteUid', null) == request.auth.uid
+      );
+      // Enforce that CFDI records are only ever written from the admin SDK
+      // (Cloud Functions). Direct client writes would be a compliance risk.
+      allow create, update, delete: if false;
+    }
+
+    // ===== ADMIN_FLAGS (Moderation queue) =====
+    // Populated by Cloud Functions (contact-info filter, deferred CFDI,
+    // dispute triggers, etc.). Only admins read; only Cloud Functions write.
+    match /admin_flags/{flagId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // ===== VALIDACION_DOCUMENTOS (Technician Document Validation) =====

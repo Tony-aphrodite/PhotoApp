@@ -8,6 +8,7 @@ import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/forgot_password_screen.dart';
 import '../features/client/screens/client_home_screen.dart';
 import '../features/client/screens/client_services_screen.dart';
+import '../features/client/screens/client_fiscal_screen.dart';
 import '../features/client/screens/create_service_screen.dart';
 import '../features/technician/screens/technician_home_screen.dart';
 import '../features/admin/screens/admin_home_screen.dart';
@@ -22,6 +23,8 @@ import '../features/diagnostic/screens/create_quotation_screen.dart';
 import '../features/diagnostic/screens/review_quotation_screen.dart';
 import '../features/validation/screens/technician_documents_screen.dart';
 import '../features/validation/screens/admin_validation_screen.dart';
+import '../features/validation/screens/fiscal_onboarding_screen.dart';
+import '../features/validation/screens/stripe_connect_screen.dart';
 import '../features/appointment/screens/book_appointment_screen.dart';
 import '../features/service/screens/service_detail_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
@@ -229,6 +232,18 @@ class AppRouter {
       GoRoute(
         path: '/admin/validation',
         builder: (context, state) => const AdminValidationScreen(),
+      ),
+      GoRoute(
+        path: '/technician/fiscal',
+        builder: (context, state) => const FiscalOnboardingScreen(),
+      ),
+      GoRoute(
+        path: '/technician/stripe',
+        builder: (context, state) => const StripeConnectScreen(),
+      ),
+      GoRoute(
+        path: '/client/fiscal',
+        builder: (context, state) => const ClientFiscalScreen(),
       ),
       GoRoute(
         path: '/appointment/:serviceId/:technicianId',

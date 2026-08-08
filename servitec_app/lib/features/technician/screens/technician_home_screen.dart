@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/fiscal_status.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/service_model.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
@@ -202,10 +204,184 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
             ),
           ];
         },
-        body: _TechnicianTabBody(
-          tabController: _tabController,
-          userId: user.uid,
+        body: Column(
+          children: [
+            _FiscalStatusBanner(user: user),
+            _StripeConnectBanner(user: user),
+            Expanded(
+              child: _TechnicianTabBody(
+                tabController: _tabController,
+                userId: user.uid,
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _FiscalStatusBanner extends StatelessWidget {
+  final UserModel user;
+  const _FiscalStatusBanner({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!user.isTechnician) return const SizedBox.shrink();
+    final display = FiscalStatus.resolveDisplay(
+      ref: user.facturapi,
+      graciaExpiraAt: user.graciaExpiraAt,
+      now: DateTime.now(),
+    );
+    if (display == FiscalDisplay.active) return const SizedBox.shrink();
+
+    final daysLeft = FiscalStatus.daysRemaining(
+      graciaExpiraAt: user.graciaExpiraAt,
+      now: DateTime.now(),
+    );
+
+    final (color, icon, title, ctaLabel, tappable) = switch (display) {
+      FiscalDisplay.needsSetup => (
+          AppTheme.warningColor,
+          Icons.info_outline_rounded,
+          daysLeft > 0
+              ? 'Completa tu registro fiscal — ${daysLeft}d restantes'
+              : 'Completa tu registro fiscal',
+          'Iniciar',
+          true,
+        ),
+      FiscalDisplay.graceExpired => (
+          AppTheme.errorColor,
+          Icons.error_outline_rounded,
+          'Periodo de gracia expirado. Sube tu CSD para reactivar tu cuenta.',
+          'Datos fiscales',
+          true,
+        ),
+      FiscalDisplay.suspended => (
+          AppTheme.errorColor,
+          Icons.block_rounded,
+          'Cuenta suspendida por facturación pendiente. Contacta soporte.',
+          null,
+          false,
+        ),
+      FiscalDisplay.active => (
+          AppTheme.successColor,
+          Icons.check_circle_outline,
+          '',
+          null,
+          false,
+        ),
+    };
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: color,
+                height: 1.3,
+              ),
+            ),
+          ),
+          if (tappable && ctaLabel != null)
+            TextButton(
+              onPressed: () => context.push('/technician/fiscal'),
+              style: TextButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minimumSize: Size.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                ctaLabel,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StripeConnectBanner extends StatelessWidget {
+  final UserModel user;
+  const _StripeConnectBanner({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!user.isTechnician) return const SizedBox.shrink();
+
+    // If the user document doesn't have a Stripe Connect account id yet,
+    // the técnico has never started onboarding — payouts are blocked until
+    // they do. Once the account exists, the Stripe screen itself handles
+    // the finer states (incomplete / active) via getTechnicianConnectStatus.
+    final needsBankAccount =
+        user.stripeConnectAccountId == null || user.stripeConnectAccountId!.isEmpty;
+    if (!needsBankAccount) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.primaryColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.account_balance_outlined,
+              size: 20, color: AppTheme.primaryColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Enlaza tu cuenta bancaria para recibir pagos automáticos',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryColor,
+                height: 1.3,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.push('/technician/stripe'),
+            style: TextButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: Size.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text(
+              'Enlazar',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,0 +1,34 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // CFDI artifacts (XML + branded PDF).
+    // Path: facturas/{facturaId}.{xml|pdf}
+    //
+    // Reads are gated by inspecting the corresponding Firestore `facturas`
+    // document — only the emisor técnico, the receptor cliente, and admin
+    // may download. Writes are locked to the admin SDK (Cloud Functions).
+    match /facturas/{facturaFile} {
+      allow read: if request.auth != null && (
+        firestore.get(
+          /databases/(default)/documents/facturas/$(facturaFile.split('.')[0])
+        ).data.tecnicoUid == request.auth.uid ||
+        firestore.get(
+          /databases/(default)/documents/facturas/$(facturaFile.split('.')[0])
+        ).data.clienteUid == request.auth.uid ||
+        firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.rol == 'admin'
+      );
+
+      // Only Cloud Functions may upload — signed via the admin SDK, which
+      // bypasses rules. Direct client uploads are refused.
+      allow write: if false;
+    }
+
+    // Default: block anything not explicitly allowed above.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

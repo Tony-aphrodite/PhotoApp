@@ -48,6 +48,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
             expandedHeight: 160,
             actions: [
               Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.verified_user_outlined,
+                      color: Colors.white),
+                  tooltip: 'Validar Tecnicos',
+                  onPressed: () => context.push('/admin/validation'),
+                ),
+              ),
+              Container(
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
