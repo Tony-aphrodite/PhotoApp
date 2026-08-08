@@ -1,4 +1,8 @@
 node_modules/
-lib/
+
+# Compiled output only. Anchored with a leading slash — an unanchored `lib/`
+# also matches src/lib/, which silently kept the shared modules out of git.
+/lib/
+
 .env
 *.log
