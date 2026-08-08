@@ -5,13 +5,16 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/phone_visibility.dart';
 import '../../../core/widgets/status_badge.dart';
+import '../../../data/models/factura_model.dart';
 import '../../../data/models/service_private_contact.dart';
 import '../../../data/models/service_model.dart';
+import '../../../data/repositories/factura_repository.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
@@ -579,6 +582,18 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                           ),
                         ),
 
+                      // CFDI — visible to both parties once the service is
+                      // paid. The invoice is stamped asynchronously by the
+                      // payment webhook, so it may take a few seconds to
+                      // appear after the payment screen returns.
+                      if (service.estado == AppConstants.statusPaid &&
+                          (isClient || isTechnician))
+                        _FacturaLink(
+                          serviceId: service.id,
+                          uid: currentUser.uid,
+                          asTecnico: isTechnician,
+                        ),
+
                       if (isAdmin && service.isPending)
                         _GradientActionButton(
                           onPressed: () =>
@@ -689,6 +704,79 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                 ),
               ),
             ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// "Ver factura (PDF)" row for a paid service.
+///
+/// Renders nothing at all while the CFDI is still being stamped, or if the
+/// técnico had no FacturAPI organization at payment time (in which case the
+/// webhook records the payment and flags it for an admin, but no invoice
+/// exists) — an absent invoice is a normal state here, not an error worth
+/// showing the customer.
+class _FacturaLink extends StatelessWidget {
+  final String serviceId;
+  final String uid;
+  final bool asTecnico;
+
+  const _FacturaLink({
+    required this.serviceId,
+    required this.uid,
+    required this.asTecnico,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<FacturaModel?>(
+      future: context.read<FacturaRepository>().getForServiceAsParticipant(
+            servicioId: serviceId,
+            uid: uid,
+            asTecnico: asTecnico,
+          ),
+      builder: (context, snapshot) {
+        final pdfUrl = snapshot.data?.pdfUrl;
+        if (pdfUrl == null) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () async {
+                final ok = await launchUrl(
+                  Uri.parse(pdfUrl),
+                  mode: LaunchMode.externalApplication,
+                );
+                if (!ok && context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No se pudo abrir la factura.'),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.receipt_long_rounded),
+              label: Text(
+                'Ver factura (PDF)',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.primaryColor,
+                side: BorderSide(
+                  color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+                ),
+              ),
+            ),
           ),
         );
       },

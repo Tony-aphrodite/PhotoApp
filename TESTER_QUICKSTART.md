@@ -167,6 +167,8 @@ Open the service chat as either party. Try sending each of these:
   - In FacturAPI dashboard under the técnico's organization → Facturas → the new invoice appears.
   - Chat gets a system pill: *"CFDI emitido — folio {UUID}"*.
 - Técnico's earnings screen shows the transaction.
+- **Reload the service detail on either device** → a **"Ver factura (PDF)"** button appears. Tap it: the browser opens the branded ServiTec PDF. If the button doesn't show, the CFDI hasn't been stamped yet (give it a few seconds) or the técnico never finished fiscal onboarding — see the gotcha in DEPLOY.md.
+- On the técnico device, **Ganancias → Facturas** lists the same CFDI with its folio fiscal and PDF / XML buttons.
 
 ---
 
@@ -192,7 +194,7 @@ For each broken step:
 ## Known limitations of this test build
 
 - **The red "Multiple capabilities paused" banner** in Stripe dashboard is expected in sandbox and doesn't affect functionality.
-- **CFDI PDFs are branded now** — both the service CFDI and the monthly commission CFDI render the ServiTec template and upload to Storage as `facturas/{facturaId}.pdf`, alongside the signed XML. The URLs land on the `facturas` document (`pdfUrl` / `xmlUrl`), but **no app screen links to them yet** — check them from the Firestore Console for this build.
+- **CFDI PDFs are branded now** — both the service CFDI and the monthly commission CFDI render the ServiTec template and upload to Storage as `facturas/{facturaId}.pdf`, alongside the signed XML. Reachable in the app: the técnico sees them under **Ganancias → Facturas**, and both parties get a **"Ver factura (PDF)"** button on a paid service's detail screen. Opening one launches the browser.
 - **Monthly commission CFDI cron** is deployed but won't run until the 1st of next month. To test manually: `firebase functions:shell` → `monthlyCommissionCron()`.
 - **iOS build not verified** — this checklist assumes Android.
 - **Marketing SDKs (AppsFlyer/Adjust/Singular) not integrated** — waiting on marketing agency's choice.

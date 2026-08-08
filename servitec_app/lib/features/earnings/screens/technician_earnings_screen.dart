@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../../data/models/factura_model.dart';
 import '../../../data/models/transaction_model.dart';
+import '../../../data/repositories/factura_repository.dart';
 import '../../../data/repositories/payment_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
@@ -17,15 +20,34 @@ class TechnicianEarningsScreen extends StatefulWidget {
       _TechnicianEarningsScreenState();
 }
 
-class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
+class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen>
+    with SingleTickerProviderStateMixin {
   EarningPeriod _selectedPeriod = EarningPeriod.month;
   EarningStats? _stats;
   bool _loading = true;
 
+  /// 0 = Ganancias, 1 = Facturas. Kept in state (rather than using a
+  /// TabBarView) so both tabs stay inside the one CustomScrollView and share
+  /// the gradient header.
+  late final TabController _tabController;
+  int _tabIndex = 0;
+
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.index != _tabIndex) {
+        setState(() => _tabIndex = _tabController.index);
+      }
+    });
     _loadStats();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadStats() async {
@@ -156,9 +178,29 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
                         ),
                       ),
                     ),
+                    bottom: TabBar(
+                      controller: _tabController,
+                      indicatorColor: Colors.white,
+                      indicatorWeight: 3,
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.white.withValues(alpha: 0.6),
+                      labelStyle: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      unselectedLabelStyle: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      tabs: const [
+                        Tab(text: 'Ganancias'),
+                        Tab(text: 'Facturas'),
+                      ],
+                    ),
                   ),
 
                   // Body content
+                  if (_tabIndex == 0)
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
@@ -424,9 +466,290 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen> {
                       ),
                     ),
                   ),
+
+                  if (_tabIndex == 1)
+                    _FacturasSliver(tecnicoUid: user.uid),
                 ],
               ),
             ),
+    );
+  }
+}
+
+/// Facturas tab — the técnico's CFDIs.
+///
+/// Two kinds land here, distinguished by [FacturaModel.tipo]:
+/// the CFDI they issued to a client for a service, and the monthly CFDI
+/// ServiTec issues to them for the platform commission. Both are stamped by
+/// Cloud Functions, never by the app, so this view is read-only.
+class _FacturasSliver extends StatelessWidget {
+  final String tecnicoUid;
+
+  const _FacturasSliver({required this.tecnicoUid});
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: StreamBuilder<List<FacturaModel>>(
+          stream: context.read<FacturaRepository>().streamByTecnico(tecnicoUid),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2.5)),
+              );
+            }
+
+            if (snapshot.hasError) {
+              return _FacturasEmpty(
+                icon: Icons.error_outline_rounded,
+                title: 'No se pudieron cargar tus facturas',
+                subtitle: 'Desliza hacia abajo para reintentar.',
+              );
+            }
+
+            final facturas = snapshot.data ?? const <FacturaModel>[];
+            if (facturas.isEmpty) {
+              return const _FacturasEmpty(
+                icon: Icons.receipt_long_outlined,
+                title: 'Aún no tienes facturas',
+                subtitle:
+                    'Cuando un cliente pague un servicio, el CFDI aparecerá aquí automáticamente.',
+              );
+            }
+
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: facturas.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) =>
+                  _FacturaCard(factura: facturas[index]),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _FacturasEmpty extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _FacturasEmpty({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48),
+      child: Column(
+        children: [
+          Icon(icon, size: 44, color: AppTheme.textTertiary),
+          const SizedBox(height: 14),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              color: AppTheme.textTertiary,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FacturaCard extends StatelessWidget {
+  final FacturaModel factura;
+
+  const _FacturaCard({required this.factura});
+
+  Future<void> _open(BuildContext context, String? url, String label) async {
+    if (url == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label no disponible para esta factura.')),
+      );
+      return;
+    }
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el $label.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isComision = factura.isComision;
+    final fecha = factura.fechaTimbrado ?? factura.createdAt;
+
+    // The commission CFDI is money going out, the service CFDI money coming
+    // in — colour-code so a técnico can tell them apart at a glance.
+    final accent = isComision ? AppTheme.accentColor : AppTheme.primaryColor;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  isComision
+                      ? Icons.percent_rounded
+                      : Icons.receipt_long_rounded,
+                  size: 20,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isComision
+                          ? 'Comisión ServiTec${factura.periodo != null ? ' · ${factura.periodo}' : ''}'
+                          : 'CFDI por servicio',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('dd/MM/yyyy · HH:mm').format(fecha),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppTheme.textTertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    CurrencyFormatter.format(factura.total),
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                      color: accent,
+                    ),
+                  ),
+                  if (factura.isCancelled)
+                    Text(
+                      'Cancelada',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.errorColor,
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          if (factura.folioFiscal != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Folio fiscal',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textTertiary,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 2),
+            SelectableText(
+              factura.folioFiscal!,
+              style: GoogleFonts.robotoMono(
+                fontSize: 11,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _open(context, factura.pdfUrl, 'PDF'),
+                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                  label: const Text('PDF'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: accent,
+                    side: BorderSide(color: accent.withValues(alpha: 0.4)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () =>
+                      _open(context, factura.xmlUrl, 'XML'),
+                  icon: const Icon(Icons.code_rounded, size: 18),
+                  label: const Text('XML'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.textSecondary,
+                    side: BorderSide(
+                      color: AppTheme.textTertiary.withValues(alpha: 0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

@@ -44,12 +44,39 @@ class FacturaRepository {
   }
 
   /// Facturas for a service (typically 0 or 1 tecnico_cliente row).
+  ///
+  /// **Admin-only.** Firestore rules grant non-admins access to a factura via
+  /// `tecnicoUid` / `clienteUid`, and a query is only permitted when its own
+  /// constraints prove every result is readable — filtering by `servicioId`
+  /// alone proves nothing, so this is rejected for técnicos and clientes
+  /// before it reads anything. They must use
+  /// [getForServiceAsParticipant] instead.
   Future<List<FacturaModel>> getByService(String servicioId) async {
     final snap = await _ref
         .where('servicioId', isEqualTo: servicioId)
         .orderBy('createdAt', descending: true)
         .get();
     return snap.docs.map((d) => FacturaModel.fromFirestore(d)).toList();
+  }
+
+  /// The CFDI for [servicioId] as seen by one of its two participants.
+  ///
+  /// Leads with the caller's own uid so the query satisfies the rules (see
+  /// [getByService]), then narrows to the service. Returns `null` when the
+  /// CFDI hasn't been stamped yet, or when the técnico had no FacturAPI
+  /// organization at payment time — both are normal states.
+  Future<FacturaModel?> getForServiceAsParticipant({
+    required String servicioId,
+    required String uid,
+    required bool asTecnico,
+  }) async {
+    final snap = await _ref
+        .where(asTecnico ? 'tecnicoUid' : 'clienteUid', isEqualTo: uid)
+        .where('servicioId', isEqualTo: servicioId)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return FacturaModel.fromFirestore(snap.docs.first);
   }
 
   /// Monthly commission facturas for a técnico across periods.
