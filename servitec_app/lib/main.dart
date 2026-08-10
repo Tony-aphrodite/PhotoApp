@@ -25,11 +25,19 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Initialize Stripe
-  // Configure with your Stripe publishable key from environment or const
+  // Initialize Stripe.
+  //
+  // The default is the ServiTec sandbox publishable key. Publishable keys are
+  // designed to ship inside client apps — they can only create payment methods
+  // and confirm intents the server already authorised, never move money or read
+  // account data. The secret key lives only in Cloud Functions.
+  //
+  // Override for a live build without touching this file:
+  //   flutter build apk --release --dart-define=STRIPE_PUBLISHABLE_KEY=pk_live_...
   Stripe.publishableKey = const String.fromEnvironment(
     'STRIPE_PUBLISHABLE_KEY',
-    defaultValue: 'pk_test_YOUR_STRIPE_PUBLISHABLE_KEY',
+    defaultValue:
+        'pk_test_51TnonGCYw4D3Tylpflzd5RglJjdk7HHyIJB6nPR8ISRotCND5u4pxRor8RclceKE1z73DTWJfXKREQnhrFtyuSHq00SSczPkV9',
   );
 
   // Initialize notifications
