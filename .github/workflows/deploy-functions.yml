@@ -91,11 +91,27 @@ jobs:
         # that the old servitec_app/functions codebase left behind. There is no
         # prompt to answer on a runner.
         run: |
+          set -o pipefail
           npx firebase-tools@15 deploy \
             --only "${{ inputs.only }}" \
             --project servicios-domicilio-mvp \
             --non-interactive \
-            --force
+            --force 2>&1 | tee deploy.log
+
+      - name: Fail if any function failed to create
+        # The CLI has exited 0 on a run where four of ten functions failed —
+        # a green tick on a partial deploy is worse than a red one, because
+        # nobody goes looking. Re-read the log and fail explicitly.
+        run: |
+          if grep -qE '^(Failed to (create|update) function|.*failed to (create|update) function)' deploy.log; then
+            echo "::error::Some functions did not deploy. Failures:"
+            grep -E 'Failed to (create|update) function' deploy.log || true
+            echo ""
+            echo "On a first 2nd-gen deploy this is usually the Eventarc/Cloud Run"
+            echo "service agents still provisioning — wait a few minutes and re-run."
+            exit 1
+          fi
+          echo "All requested functions deployed."
 
       - name: Show the deployed function URLs
         if: success()
