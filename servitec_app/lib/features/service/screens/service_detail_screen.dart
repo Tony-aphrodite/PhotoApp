@@ -645,14 +645,40 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                                         ),
                                       ),
                                       ElevatedButton(
-                                        onPressed: () {
-                                          context
-                                              .read<ServiceRepository>()
-                                              .updateServiceStatus(
-                                                service.id,
-                                                AppConstants.statusCancelled,
-                                              );
+                                        // Was fire-and-forget: the future was
+                                        // never awaited and the dialog closed
+                                        // immediately, so a rejected write (or
+                                        // an invalid transition) disappeared
+                                        // silently and the button looked dead.
+                                        onPressed: () async {
+                                          final messenger =
+                                              ScaffoldMessenger.of(context);
                                           Navigator.pop(ctx);
+                                          try {
+                                            await context
+                                                .read<ServiceRepository>()
+                                                .updateServiceStatus(
+                                                  service.id,
+                                                  AppConstants.statusCancelled,
+                                                );
+                                            messenger.showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                    'Servicio cancelado.'),
+                                                backgroundColor:
+                                                    AppTheme.successColor,
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            messenger.showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                    'No se pudo cancelar: $e'),
+                                                backgroundColor:
+                                                    AppTheme.errorColor,
+                                              ),
+                                            );
+                                          }
                                         },
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor:

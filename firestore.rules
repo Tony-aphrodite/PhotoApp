@@ -83,9 +83,20 @@ service cloud.firestore {
       // - Técnico solo puede actualizar estado de servicios asignados
       allow update: if isAuthenticated() && (
         isAdmin() ||
+        // Cliente: free rein while the request is still pendiente. Two
+        // narrow exceptions once a técnico has been assigned:
+        //  - cancelling (the button is offered for pendiente AND asignado)
+        //  - attaching `fotos`, which the app writes moments after create —
+        //    by which time onServiceCreated may already have flipped the
+        //    service to `asignado`, so a pendiente-only rule loses the photos.
         (isCliente() &&
          resource.data.clienteId == request.auth.uid &&
-         resource.data.estado == 'pendiente') ||
+         (resource.data.estado == 'pendiente' ||
+          (request.resource.data.estado == 'cancelado' &&
+           request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['estado', 'updatedAt'])) ||
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['fotos']))) ||
         (isTecnico() &&
          resource.data.get('tecnicoId', null) == request.auth.uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']))
@@ -122,6 +133,25 @@ service cloud.firestore {
         allow delete: if isAdmin();
       }
 
+      // Subcollection: fotos
+      // Photos of the reported problem, written by the cliente right after
+      // creating the service. Stored as base64 data URLs (the app does not use
+      // Cloud Storage). Same audience as the parent service.
+      match /fotos/{fotoId} {
+        allow read: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
+        );
+
+        allow create: if isAuthenticated() && (
+          isAdmin() ||
+          get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid
+        );
+
+        allow update, delete: if isAdmin();
+      }
+
       // Subcollection: mensajes
       match /mensajes/{mensajeId} {
         allow read: if isAuthenticated() && (
@@ -134,7 +164,17 @@ service cloud.firestore {
           isAdmin() ||
           get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
           get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
-        ) && request.resource.data.userId == request.auth.uid;
+        ) && (
+          request.resource.data.userId == request.auth.uid ||
+          // System narration ("Técnico asignado: X", "Cotización enviada…")
+          // is written by the participant whose action triggered it, but is
+          // authored as 'system' so the UI renders it as a grey pill rather
+          // than that person's message. Without this the write is denied and
+          // every lifecycle event fails — including the push notifications,
+          // which ride on these messages.
+          (request.resource.data.userId == 'system' &&
+           request.resource.data.tipo == 'sistema')
+        );
 
         allow update: if isAuthenticated() &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['leido']);

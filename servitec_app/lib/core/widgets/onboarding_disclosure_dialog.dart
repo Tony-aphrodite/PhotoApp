@@ -14,6 +14,16 @@ import '../theme/app_theme.dart';
 class OnboardingDisclosureDialog extends StatelessWidget {
   const OnboardingDisclosureDialog({super.key});
 
+  /// Uids already prompted during this app session.
+  ///
+  /// Accepting writes `disclosureAcceptedAt` to Firestore, but AuthBloc holds a
+  /// cached UserModel that is not refreshed by that write — so `alreadyAccepted`
+  /// stays false for the rest of the session. AppShell calls this from `build`,
+  /// which re-runs on every bottom-nav tab change, and the modal reappeared each
+  /// time. This guard makes it once-per-session; the Firestore flag makes it
+  /// once-per-user across launches.
+  static final Set<String> _promptedThisSession = <String>{};
+
   /// Shows the dialog if [alreadyAccepted] is false. Writes the acceptance
   /// timestamp to Firestore on tap. Idempotent — safe to call every rebuild.
   static Future<void> maybeShow({
@@ -22,6 +32,9 @@ class OnboardingDisclosureDialog extends StatelessWidget {
     required bool alreadyAccepted,
   }) async {
     if (alreadyAccepted) return;
+    // `add` returns false when the uid was already in the set.
+    if (!_promptedThisSession.add(uid)) return;
+
     // Defer to post-frame so we don't try to open a route mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!context.mounted) return;
@@ -30,11 +43,19 @@ class OnboardingDisclosureDialog extends StatelessWidget {
         barrierDismissible: false,
         builder: (_) => const OnboardingDisclosureDialog(),
       );
-      if (accepted == true) {
+      if (accepted != true) {
+        // Dismissed without accepting (e.g. back button) — let it ask again.
+        _promptedThisSession.remove(uid);
+        return;
+      }
+      try {
         await FirebaseFirestore.instance
             .collection(AppConstants.usersCollection)
             .doc(uid)
             .update({'disclosureAcceptedAt': Timestamp.now()});
+      } catch (_) {
+        // The session guard already stops it reappearing now; a failed write
+        // just means it asks again on the next launch. Not worth blocking on.
       }
     });
   }

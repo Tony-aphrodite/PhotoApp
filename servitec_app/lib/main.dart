@@ -98,7 +98,12 @@ class ServiTecApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: ThemeMode.system,
+          // Pinned to light. Every screen hardcodes white surfaces and
+          // near-black text (AppTheme.textPrimary), so on a phone set to dark
+          // mode the system theme rendered dark text on dark panels — the
+          // disclosure modal and the photo picker sheet were unreadable.
+          // Revisit only if the screens are reworked to be theme-aware.
+          themeMode: ThemeMode.light,
           routerConfig: appRouter.router,
         ),
       ),
