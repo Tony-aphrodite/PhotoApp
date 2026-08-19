@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
@@ -111,21 +112,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
   }
 
+  /// Turns an auth failure into something the user can act on.
+  ///
+  /// Reads `FirebaseAuthException.code` directly rather than substring-matching
+  /// `toString()`, and — critically — includes the raw code in the fallback.
+  /// The previous version returned a bare "Error de autenticación" for any code
+  /// it did not list, which hid the real cause during testing and left nothing
+  /// to diagnose from.
   String _mapAuthError(dynamic error) {
-    final message = error.toString();
-    if (message.contains('user-not-found')) {
-      return 'No se encontró una cuenta con este correo';
-    } else if (message.contains('wrong-password')) {
-      return 'Contraseña incorrecta';
-    } else if (message.contains('email-already-in-use')) {
-      return 'Este correo ya está registrado';
-    } else if (message.contains('weak-password')) {
-      return 'La contraseña es demasiado débil';
-    } else if (message.contains('invalid-email')) {
-      return 'Correo electrónico inválido';
-    } else if (message.contains('too-many-requests')) {
-      return 'Demasiados intentos. Intenta más tarde';
+    final code = error is FirebaseAuthException
+        ? error.code
+        : RegExp(r'\[firebase_auth/([a-z-]+)\]')
+                .firstMatch(error.toString())
+                ?.group(1) ??
+            '';
+
+    switch (code) {
+      // Modern Firebase returns this for both a wrong password and an unknown
+      // email, so the copy must not imply which one it was.
+      case 'invalid-credential':
+      case 'invalid-login-credentials':
+        return 'Correo o contraseña incorrectos';
+      case 'user-not-found':
+        return 'No se encontró una cuenta con este correo';
+      case 'wrong-password':
+        return 'Contraseña incorrecta';
+      case 'email-already-in-use':
+        return 'Este correo ya está registrado. Inicia sesión o usa otro correo.';
+      case 'weak-password':
+        return 'La contraseña debe tener al menos 6 caracteres';
+      case 'invalid-email':
+        return 'Correo electrónico inválido';
+      case 'user-disabled':
+        return 'Esta cuenta está deshabilitada. Contacta a soporte.';
+      case 'too-many-requests':
+        return 'Demasiados intentos fallidos. Espera unos minutos e intenta de nuevo.';
+      case 'network-request-failed':
+        return 'Sin conexión. Revisa tu internet e intenta de nuevo.';
+      case 'operation-not-allowed':
+        return 'El registro con correo no está habilitado en el proyecto.';
+      case 'permission-denied':
+        return 'Tu cuenta se creó pero no se pudo guardar el perfil. Contacta a soporte.';
     }
-    return 'Error de autenticación. Intenta de nuevo';
+
+    // Unknown: surface the code so a screenshot is enough to diagnose it.
+    final detail = code.isNotEmpty ? code : error.toString();
+    return 'Error de autenticación ($detail)';
   }
 }
