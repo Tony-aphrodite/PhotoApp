@@ -277,12 +277,17 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
       if (_photos.isNotEmpty) {
         try {
           final storageRepo = context.read<StorageRepository>();
-          final photoUrls = await storageRepo.uploadServicePhotos(
+          final images = await storageRepo.uploadServicePhotos(
             createdService.id,
             _photos,
           );
-          await serviceRepo
-              .updateService(createdService.id, {'fotos': photoUrls});
+          // Two parallel arrays rather than a list of maps: `fotos` keeps the
+          // shape every existing screen already reads, and `fotosThumbs` is
+          // what the lists use so they never pull full-resolution images.
+          await serviceRepo.updateService(createdService.id, {
+            'fotos': images.map((i) => i.url).toList(),
+            'fotosThumbs': images.map((i) => i.thumbUrl).toList(),
+          });
         } catch (e, stack) {
           // Photos failed to upload but service was created
           if (mounted) {

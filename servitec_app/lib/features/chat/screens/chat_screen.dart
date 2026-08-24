@@ -116,12 +116,19 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _uploadingImage = true);
     try {
       final storageRepo = context.read<StorageRepository>();
-      final dataUrl = await storageRepo.uploadChatImage(File(picked.path));
+      final image = await storageRepo.uploadChatImage(
+        widget.serviceId,
+        File(picked.path),
+      );
+      if (!context.mounted) return;
+      // Chat bubbles are small, so the message carries the thumbnail. Sending
+      // the full-size URL would download ~250 KB per bubble on every scroll
+      // through the conversation.
       await context.read<ServiceRepository>().sendImageMessage(
             serviceId: widget.serviceId,
             userId: user.uid,
             userName: user.fullName,
-            imageDataUrl: dataUrl,
+            imageDataUrl: image.thumbUrl,
           );
       _scrollToBottom();
     } catch (e) {

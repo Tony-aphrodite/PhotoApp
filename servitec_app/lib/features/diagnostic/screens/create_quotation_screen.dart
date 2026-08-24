@@ -74,10 +74,13 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       List<String> photoUrls = [];
       if (_diagnosticPhotos.isNotEmpty) {
         final storageRepo = context.read<StorageRepository>();
-        photoUrls = await storageRepo.uploadServicePhotos(
+        final images = await storageRepo.uploadServicePhotos(
           '${widget.serviceId}_diagnostico',
           _diagnosticPhotos,
         );
+        // The quotation shows these full-screen as diagnosis evidence, so the
+        // model keeps the full-size URLs.
+        photoUrls = images.map((i) => i.url).toList();
       }
 
       final quotation = QuotationModel(

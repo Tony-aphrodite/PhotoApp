@@ -60,8 +60,11 @@ class ServiceCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero image or emoji header
-            if (service.fotos.isNotEmpty)
-              _buildHeroImage(service.fotos.first, service.estado)
+            // fotoPreview, never fotos.first: this widget is rendered once
+            // per row in every list, and fotos.first is the full-resolution
+            // image.
+            if (service.fotoPreview != null)
+              _buildHeroImage(service.fotoPreview!, service.estado)
             else
               _buildEmojiHeader(emoji, service.estado),
 

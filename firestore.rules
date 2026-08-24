@@ -86,9 +86,11 @@ service cloud.firestore {
         // Cliente: free rein while the request is still pendiente. Two
         // narrow exceptions once a técnico has been assigned:
         //  - cancelling (the button is offered for pendiente AND asignado)
-        //  - attaching `fotos`, which the app writes moments after create —
-        //    by which time onServiceCreated may already have flipped the
-        //    service to `asignado`, so a pendiente-only rule loses the photos.
+        //  - attaching the photo URLs, which the app writes moments after
+        //    create — by which time onServiceCreated may already have flipped
+        //    the service to `asignado`, so a pendiente-only rule loses them.
+        //    `updatedAt` is in the set because ServiceRepository.updateService
+        //    stamps it on every call.
         (isCliente() &&
          resource.data.clienteId == request.auth.uid &&
          (resource.data.estado == 'pendiente' ||
@@ -96,7 +98,7 @@ service cloud.firestore {
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['estado', 'updatedAt'])) ||
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['fotos']))) ||
+            .hasOnly(['fotos', 'fotosThumbs', 'updatedAt']))) ||
         (isTecnico() &&
          resource.data.get('tecnicoId', null) == request.auth.uid &&
          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']))

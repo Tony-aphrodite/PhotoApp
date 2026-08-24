@@ -109,21 +109,33 @@ class _TechnicianDocumentsScreenState extends State<TechnicianDocumentsScreen> {
       for (final entry in _documents.entries) {
         if (entry.value != null) {
           final key = entry.key.replaceAll(' ', '_').toLowerCase();
-          final url = await storageRepo.uploadProfilePhoto(
-            '$uid/documentos/$key',
+          // Was calling uploadProfilePhoto with '$uid/documentos/$key' as the
+          // *user id*, which resolved to users/{uid}/documentos/{key} and then
+          // ran .update() on a document that does not exist — so uploading an
+          // INE failed outright. Documents now have their own method.
+          final doc = await storageRepo.uploadUserDocument(
+            uid,
+            key,
             entry.value!,
           );
-          updates['documento${entry.key.replaceAll(' ', '')}'] = url;
+          // Full size, not the thumbnail: an admin has to read the small print
+          // on an INE to validate it.
+          updates['documento${entry.key.replaceAll(' ', '')}'] = doc.url;
         }
       }
 
       // Upload certifications
       if (_certifications.isNotEmpty) {
-        final certUrls = await storageRepo.uploadServicePhotos(
-          '$uid/certificaciones',
-          _certifications,
-        );
-        updates['certificaciones'] = certUrls;
+        final certs = <String>[];
+        for (var i = 0; i < _certifications.length; i++) {
+          final cert = await storageRepo.uploadUserDocument(
+            uid,
+            'certificacion_$i',
+            _certifications[i],
+          );
+          certs.add(cert.url);
+        }
+        updates['certificaciones'] = certs;
       }
 
       updates['estadoValidacion'] = 'pendiente';

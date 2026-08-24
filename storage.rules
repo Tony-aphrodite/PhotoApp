@@ -2,22 +2,85 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Nothing in this bucket is reached by a client through these rules.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // 8 MiB ceiling: the app uploads JPEGs resized to a 1600 px long edge,
+    // which land around 250-400 KB. The margin absorbs an unusually large
+    // photo; anything above it is not a phone camera image.
+    function isImageUpload() {
+      return request.resource.contentType.matches('image/.*')
+             && request.resource.size < 8 * 1024 * 1024;
+    }
+
+    // ---------------------------------------------------------------------
+    // How access actually works here
     //
-    // CFDI artifacts live at facturas/{facturaId}.{xml,pdf}. Cloud Functions
-    // write them with the Admin SDK, which bypasses rules entirely, and the app
-    // opens them through the download-token URL saved on the Firestore
-    // `facturas` document. That document is already restricted to the emisor
-    // técnico, the receptor cliente, and admins — so the access boundary is
-    // enforced there, and anyone able to read the URL could read the invoice
-    // anyway.
+    // Writes are authorised by path: every upload folder ends in the
+    // uploader's uid, so a user can only ever write under their own prefix.
     //
-    // An earlier version gated reads here with firestore.get() against the
-    // `facturas` document. That is stricter in principle, but cross-service
-    // rules cannot even be *published* until a project Owner grants the Storage
-    // service agent a Firestore read role — the Console rejects them outright.
-    // Restore that version if the app ever switches to
-    // FirebaseStorage.ref(path).getDownloadURL(), which does go through rules.
+    // Reads by path are owner-only. The other participants of a service reach
+    // an image through the download URL stored on the Firestore document
+    // (servicios/{id}.fotos, the message, the user profile) — and those
+    // documents are themselves restricted by firestore.rules to the cliente,
+    // the assigned técnico, and admins. So the access boundary is enforced,
+    // just on the document rather than on the object.
+    //
+    // This is the same model Firebase's own getDownloadURL() produces: it
+    // checks rules to *hand out* a tokenised URL, and that URL then works on
+    // its own. Gating the object read on service membership instead would need
+    // a cross-service firestore.get(), which cannot be published until a
+    // project Owner grants the Storage service agent a Firestore read role.
+    // Worth doing later; not required for the boundary to hold.
+    // ---------------------------------------------------------------------
+
+    // Photos attached to a service request.
+    // Path: servicios/{servicioId}/{uid}/{uuid}.jpg  (+ _thumb.jpg)
+    match /servicios/{servicioId}/{uid}/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isImageUpload();
+      allow delete: if isOwner(uid);
+    }
+
+    // Images sent inside a service chat.
+    match /chat/{servicioId}/{uid}/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isImageUpload();
+      allow delete: if isOwner(uid);
+    }
+
+    // Profile photos.
+    match /usuarios/{uid}/perfil/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isImageUpload();
+      allow delete: if isOwner(uid);
+    }
+
+    // Técnico identity and certification documents (INE, CURP, comprobantes).
+    // The most sensitive bucket content — personal identity documents. Only
+    // the owner may touch them by path; an admin validates through the URL on
+    // the user document, which firestore.rules already restricts to admins and
+    // the técnico themselves.
+    match /usuarios/{uid}/documentos/{documentKey}/{fileName} {
+      allow read: if isOwner(uid);
+      allow create, update: if isOwner(uid) && isImageUpload();
+      allow delete: if isOwner(uid);
+    }
+
+    // CFDI artifacts (XML + branded PDF) written by Cloud Functions with the
+    // Admin SDK, which bypasses these rules entirely. No client ever reads or
+    // writes them by path — the app opens the download URL held on the
+    // rules-protected `facturas` document.
+    match /facturas/{facturaFile} {
+      allow read, write: if false;
+    }
+
+    // Anything not matched above is denied.
     match /{allPaths=**} {
       allow read, write: if false;
     }

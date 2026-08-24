@@ -15,7 +15,27 @@ class ServiceModel extends Equatable {
   final GeoPoint ubicacion;
   final String ubicacionTexto;
   final String? geohash;
+  /// Full-size photo URLs, for the detail screen.
+  ///
+  /// Historically these were base64 `data:` URLs stored inline; since the move
+  /// to Cloud Storage they are https download URLs. Both render, so services
+  /// created before the migration keep working.
   final List<String> fotos;
+
+  /// Thumbnail URLs, same order as [fotos]. Lists and cards must read these —
+  /// pulling [fotos] into a list view downloads full-resolution images for
+  /// every row. Empty on pre-migration services, where callers fall back to
+  /// [fotos].
+  final List<String> fotosThumbs;
+
+  /// The image a list or card should show: the thumbnail when one exists,
+  /// otherwise the full-size photo (services created before the Cloud Storage
+  /// migration have no thumbnails). Null when the service has no photos.
+  String? get fotoPreview {
+    if (fotosThumbs.isNotEmpty) return fotosThumbs.first;
+    if (fotos.isNotEmpty) return fotos.first;
+    return null;
+  }
   final String estado;
   final String tipoAsignacion;
   final bool seleccionadoPorCliente;
@@ -47,6 +67,7 @@ class ServiceModel extends Equatable {
     required this.ubicacionTexto,
     this.geohash,
     required this.fotos,
+    this.fotosThumbs = const [],
     required this.estado,
     required this.tipoAsignacion,
     this.seleccionadoPorCliente = false,
@@ -85,6 +106,9 @@ class ServiceModel extends Equatable {
       ubicacionTexto: data['ubicacionTexto'] ?? '',
       geohash: data['geohash'],
       fotos: data['fotos'] != null ? List<String>.from(data['fotos']) : [],
+      fotosThumbs: data['fotosThumbs'] != null
+          ? List<String>.from(data['fotosThumbs'])
+          : const [],
       estado: data['estado'] ?? 'pendiente',
       tipoAsignacion: data['tipoAsignacion'] ?? 'automatica',
       seleccionadoPorCliente: data['seleccionadoPorCliente'] ?? false,
@@ -113,6 +137,7 @@ class ServiceModel extends Equatable {
       'ubicacion': ubicacion,
       'ubicacionTexto': ubicacionTexto,
       'fotos': fotos,
+      'fotosThumbs': fotosThumbs,
       'estado': estado,
       'tipoAsignacion': tipoAsignacion,
       'seleccionadoPorCliente': seleccionadoPorCliente,
@@ -146,6 +171,7 @@ class ServiceModel extends Equatable {
     String? ubicacionTexto,
     String? geohash,
     List<String>? fotos,
+    List<String>? fotosThumbs,
     String? estado,
     String? tipoAsignacion,
     bool? seleccionadoPorCliente,
@@ -171,6 +197,7 @@ class ServiceModel extends Equatable {
       ubicacionTexto: ubicacionTexto ?? this.ubicacionTexto,
       geohash: geohash ?? this.geohash,
       fotos: fotos ?? this.fotos,
+      fotosThumbs: fotosThumbs ?? this.fotosThumbs,
       estado: estado ?? this.estado,
       tipoAsignacion: tipoAsignacion ?? this.tipoAsignacion,
       seleccionadoPorCliente: seleccionadoPorCliente ?? this.seleccionadoPorCliente,
@@ -187,7 +214,7 @@ class ServiceModel extends Equatable {
   List<Object?> get props => [
         id, clienteId, clienteNombre, clienteTelefono, tecnicoId,
         tecnicoNombre, titulo, descripcion, categoria, urgencia,
-        ubicacion, ubicacionTexto, geohash, fotos, estado,
+        ubicacion, ubicacionTexto, geohash, fotos, fotosThumbs, estado,
         tipoAsignacion, seleccionadoPorCliente, estimacionCosto,
         costoFinal, createdAt, updatedAt, asignadoAt, completadoAt,
       ];
