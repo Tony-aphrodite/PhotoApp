@@ -744,7 +744,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 /// webhook records the payment and flags it for an admin, but no invoice
 /// exists) — an absent invoice is a normal state here, not an error worth
 /// showing the customer.
-class _FacturaLink extends StatelessWidget {
+class _FacturaLink extends StatefulWidget {
   final String serviceId;
   final String uid;
   final bool asTecnico;
@@ -756,13 +756,32 @@ class _FacturaLink extends StatelessWidget {
   });
 
   @override
+  State<_FacturaLink> createState() => _FacturaLinkState();
+}
+
+class _FacturaLinkState extends State<_FacturaLink> {
+  /// Resolved once in initState, not in build.
+  ///
+  /// ServiceDetailScreen rebuilds on every service snapshot and on every
+  /// photo-gallery swipe (`setState(_currentPage)`). Creating the future
+  /// inline in build re-ran this Firestore query on each of those — a paid
+  /// read for an invoice that cannot change while the screen is open.
+  late final Future<FacturaModel?> _factura;
+
+  @override
+  void initState() {
+    super.initState();
+    _factura = context.read<FacturaRepository>().getForServiceAsParticipant(
+          servicioId: widget.serviceId,
+          uid: widget.uid,
+          asTecnico: widget.asTecnico,
+        );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<FacturaModel?>(
-      future: context.read<FacturaRepository>().getForServiceAsParticipant(
-            servicioId: serviceId,
-            uid: uid,
-            asTecnico: asTecnico,
-          ),
+      future: _factura,
       builder: (context, snapshot) {
         final pdfUrl = snapshot.data?.pdfUrl;
         if (pdfUrl == null) return const SizedBox.shrink();

@@ -482,10 +482,28 @@ class _TechnicianEarningsScreenState extends State<TechnicianEarningsScreen>
 /// the CFDI they issued to a client for a service, and the monthly CFDI
 /// ServiTec issues to them for the platform commission. Both are stamped by
 /// Cloud Functions, never by the app, so this view is read-only.
-class _FacturasSliver extends StatelessWidget {
+class _FacturasSliver extends StatefulWidget {
   final String tecnicoUid;
 
   const _FacturasSliver({required this.tecnicoUid});
+
+  @override
+  State<_FacturasSliver> createState() => _FacturasSliverState();
+}
+
+class _FacturasSliverState extends State<_FacturasSliver> {
+  /// Subscribed once. Built inline in build(), every rebuild of the earnings
+  /// screen — including each period-filter tap and tab switch — tore down the
+  /// listener and opened a new one, and a fresh snapshot listener re-reads the
+  /// whole result set as paid reads.
+  late final Stream<List<FacturaModel>> _facturas;
+
+  @override
+  void initState() {
+    super.initState();
+    _facturas =
+        context.read<FacturaRepository>().streamByTecnico(widget.tecnicoUid);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +511,7 @@ class _FacturasSliver extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: StreamBuilder<List<FacturaModel>>(
-          stream: context.read<FacturaRepository>().streamByTecnico(tecnicoUid),
+          stream: _facturas,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Padding(
