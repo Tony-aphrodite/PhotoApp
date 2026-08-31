@@ -48,8 +48,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   Future<void> _pickPhoto() async {
     final picked = await _picker.pickImage(
       source: ImageSource.camera,
-      maxWidth: 1200,
-      imageQuality: 80,
+      // Diagnosis evidence; StorageRepository does the real resize.
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 90,
     );
     if (picked != null) {
       setState(() => _diagnosticPhotos.add(File(picked.path)));

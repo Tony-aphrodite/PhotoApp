@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -104,8 +104,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final picked = await _picker.pickImage(
       source: source,
-      maxWidth: 1400,
-      imageQuality: 75,
+      maxWidth: 2000,
+      imageQuality: 88,
     );
     if (picked == null) return;
 
@@ -120,7 +120,8 @@ class _ChatScreenState extends State<ChatScreen> {
         widget.serviceId,
         File(picked.path),
       );
-      if (!context.mounted) return;
+      // State.context, so the State's own `mounted` is the right guard.
+      if (!mounted) return;
       // Chat bubbles are small, so the message carries the thumbnail. Sending
       // the full-size URL would download ~250 KB per bubble on every scroll
       // through the conversation.
@@ -129,6 +130,7 @@ class _ChatScreenState extends State<ChatScreen> {
             userId: user.uid,
             userName: user.fullName,
             imageDataUrl: image.thumbUrl,
+            imageFullUrl: image.url,
           );
       _scrollToBottom();
     } catch (e) {
@@ -754,52 +756,82 @@ class _ImageContent extends StatelessWidget {
 
   const _ImageContent({required this.message});
 
+  Widget get _broken => Container(
+        width: 200,
+        height: 160,
+        color: AppTheme.dividerColor,
+        child: const Icon(Icons.broken_image_outlined,
+            color: Colors.white54, size: 32),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final dataUrl = message.imageData;
-    if (dataUrl == null || dataUrl.isEmpty) {
-      return Container(
-        width: 200,
-        height: 160,
-        color: AppTheme.dividerColor,
-        child: const Icon(Icons.broken_image_outlined,
-            color: Colors.white54, size: 32),
-      );
-    }
+    final source = message.imageData;
+    if (source == null || source.isEmpty) return _broken;
 
-    try {
-      final b64 = dataUrl.split(',').last;
-      final Uint8List bytes = base64Decode(b64);
-      return GestureDetector(
-        onTap: () => _openFullscreen(context, bytes),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: Image.memory(
-            bytes,
-            fit: BoxFit.cover,
-            width: 220,
+    // Two shapes reach here. Messages sent before images moved to Cloud
+    // Storage hold an inline base64 `data:` URL; messages sent since hold a
+    // thumbnail download URL. Decoding unconditionally — which is what this
+    // did — turns every new image into a broken-image icon, because an https
+    // URL has no comma to split on and is not valid base64.
+    final isLegacyInline = source.startsWith('data:');
+
+    final Widget thumb;
+    if (isLegacyInline) {
+      try {
+        thumb = Image.memory(
+          base64Decode(source.split(',').last),
+          fit: BoxFit.cover,
+          width: 220,
+        );
+      } catch (_) {
+        return _broken;
+      }
+    } else {
+      thumb = CachedNetworkImage(
+        imageUrl: source,
+        fit: BoxFit.cover,
+        width: 220,
+        placeholder: (_, __) => Container(
+          width: 220,
+          height: 160,
+          color: AppTheme.dividerColor,
+          child: const Center(
+            child: SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
         ),
-      );
-    } catch (_) {
-      return Container(
-        width: 200,
-        height: 160,
-        color: AppTheme.dividerColor,
-        child: const Icon(Icons.broken_image_outlined,
-            color: Colors.white54, size: 32),
+        errorWidget: (_, __, ___) => _broken,
       );
     }
+
+    // Tapping opens the full-resolution image when one was stored; older
+    // messages only ever had the single inline copy.
+    final fullUrl = message.metadata?['imageFullUrl'] as String?;
+    return GestureDetector(
+      onTap: () => _openFullscreen(context, fullUrl ?? source),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: thumb,
+      ),
+    );
   }
 
-  void _openFullscreen(BuildContext context, Uint8List bytes) {
+  void _openFullscreen(BuildContext context, String source) {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black87,
       builder: (ctx) => GestureDetector(
         onTap: () => Navigator.pop(ctx),
         child: InteractiveViewer(
-          child: Center(child: Image.memory(bytes)),
+          child: Center(
+            child: source.startsWith('data:')
+                ? Image.memory(base64Decode(source.split(',').last))
+                : CachedNetworkImage(imageUrl: source),
+          ),
         ),
       ),
     );

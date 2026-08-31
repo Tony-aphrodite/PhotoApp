@@ -57,8 +57,11 @@ class _TechnicianDocumentsScreenState extends State<TechnicianDocumentsScreen> {
   Future<void> _pickDocument(String docType) async {
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 85,
+      // INE / CURP / comprobantes: an admin must be able to read the small
+      // print to validate them, so these get the highest quality in the app.
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 92,
     );
     if (picked != null) {
       setState(() => _documents[docType] = File(picked.path));
@@ -68,8 +71,11 @@ class _TechnicianDocumentsScreenState extends State<TechnicianDocumentsScreen> {
   Future<void> _addCertification() async {
     final picked = await _picker.pickImage(
       source: ImageSource.gallery,
-      maxWidth: 1600,
-      imageQuality: 85,
+      // INE / CURP / comprobantes: an admin must be able to read the small
+      // print to validate them, so these get the highest quality in the app.
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 92,
     );
     if (picked != null) {
       setState(() => _certifications.add(File(picked.path)));

@@ -144,9 +144,13 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
 
     final picked = await _picker.pickImage(
       source: source,
-      maxWidth: 800,
-      maxHeight: 800,
-      imageQuality: 60,
+      // Loose caps on purpose. These photos are the evidence of the problem
+      // being reported, and 800x800 at quality 60 — sized for the old
+      // Base64-into-Firestore path — visibly destroyed detail before
+      // StorageRepository ever saw the file. It now does the one real resize.
+      maxWidth: 2400,
+      maxHeight: 2400,
+      imageQuality: 90,
     );
 
     if (picked != null) {

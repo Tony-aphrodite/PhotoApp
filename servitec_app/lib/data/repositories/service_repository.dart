@@ -336,11 +336,16 @@ class ServiceRepository {
 
   /// Send an image message (data URL stored inline, matching existing
   /// base64-in-Firestore storage strategy).
+  /// [imageDataUrl] is what the bubble renders — a thumbnail URL since the
+  /// move to Cloud Storage. [imageFullUrl] is the full-resolution version
+  /// opened when the bubble is tapped; without it the fullscreen view would
+  /// show a 400 px thumbnail blown up, which is useless as evidence.
   Future<void> sendImageMessage({
     required String serviceId,
     required String userId,
     required String userName,
     required String imageDataUrl,
+    String? imageFullUrl,
     String caption = '',
   }) async {
     final message = MessageModel(
@@ -351,6 +356,8 @@ class ServiceRepository {
       timestamp: DateTime.now(),
       tipo: MessageModel.tipoImagen,
       imageData: imageDataUrl,
+      metadata:
+          imageFullUrl == null ? null : {'imageFullUrl': imageFullUrl},
     );
     await sendMessage(serviceId, message);
   }
