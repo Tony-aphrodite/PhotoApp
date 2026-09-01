@@ -129,6 +129,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
         servicioId,
         tecnicoUid,
         stripePaymentIntentId: pi.id,
+        estado: 'pendiente',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       res.status(200).send('payment recorded; CFDI deferred (técnico sin FacturAPI)');
@@ -252,6 +253,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
         servicioId,
         facturapiInvoiceId: invoice.id,
         error: (err as Error).message,
+        estado: 'pendiente',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       // fall through — save invoice metadata without URLs

@@ -118,6 +118,7 @@ export const onServiceCreated = onDocumentCreated(
         type: 'no_technician_available',
         servicioId,
         categoria,
+        estado: 'pendiente',
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       return;

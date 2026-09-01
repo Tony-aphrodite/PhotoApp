@@ -30,6 +30,16 @@ export const onChatMessageCreated = onDocumentCreated(
     const serviceId = event.params.serviceId as string;
     const messageId = event.params.messageId as string;
 
+    // Load the service up front. It is needed twice: to name both parties on a
+    // moderation flag, and to address the push fan-out. Reading it before the
+    // violation branch costs one extra read on a blocked message and saves the
+    // admin screen from having to resolve participants itself.
+    const serviceSnap = await db.collection('servicios').doc(serviceId).get();
+    if (!serviceSnap.exists) return;
+    const service = serviceSnap.data()!;
+    const clienteId = service.clienteId as string | undefined;
+    const tecnicoId = service.tecnicoId as string | undefined;
+
     // System messages skip the filter (they come from our own server) but we
     // still fan out lifecycle-event pushes below.
     if (tipo !== 'sistema') {
@@ -53,12 +63,21 @@ export const onChatMessageCreated = onDocumentCreated(
         );
         await db.collection('admin_flags').add({
           type: 'chat_contact_info_leak_attempt',
-          serviceId,
+          // `servicioId` is the name used across the rest of the codebase;
+          // this flag used to write `serviceId` and nothing else did.
+          servicioId: serviceId,
           messageId,
+          // Both participants, so the moderation screen can show who was
+          // talking to whom without a second lookup per row.
+          clienteId: clienteId ?? null,
+          tecnicoId: tecnicoId ?? null,
           offenderUid: data.userId ?? null,
           offenderName: data.nombreUsuario ?? null,
           originalText: text,
           reason: violation.reason,
+          // Review state, driven from the admin panel. No automatic sanction
+          // is applied — the flag only records what happened.
+          estado: 'pendiente',
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         // Do NOT push a notification for a blocked message.
@@ -67,14 +86,8 @@ export const onChatMessageCreated = onDocumentCreated(
     }
 
     // ---- Push notification fan-out ----
-    // Load the service so we know the two participants. Push to everyone
-    // EXCEPT the sender (user messages → other party only; system events →
-    // both parties since neither of them is the "sender").
-    const serviceSnap = await db.collection('servicios').doc(serviceId).get();
-    if (!serviceSnap.exists) return;
-    const service = serviceSnap.data()!;
-    const clienteId = service.clienteId as string | undefined;
-    const tecnicoId = service.tecnicoId as string | undefined;
+    // Push to everyone EXCEPT the sender (user messages → other party only;
+    // system events → both parties since neither of them is the "sender").
     const senderUid = data.userId as string | undefined;
 
     const recipients = [clienteId, tecnicoId].filter(

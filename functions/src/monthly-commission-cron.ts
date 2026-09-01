@@ -188,6 +188,7 @@ export const monthlyCommissionCron = onSchedule(
           periodo,
           facturapiInvoiceId: invoice.id,
           error: (err as Error).message,
+          estado: 'pendiente',
           createdAt: new Date(),
         });
       }

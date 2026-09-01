@@ -4,161 +4,316 @@
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "clienteId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "clienteId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "categoria", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "categoria", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "categoria",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "servicios",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "paidAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "paidAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "mensajes",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "leido", "order": "ASCENDING" },
-        { "fieldPath": "userId", "order": "ASCENDING" }
+        {
+          "fieldPath": "leido",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "rol", "order": "ASCENDING" },
-        { "fieldPath": "disponible", "order": "ASCENDING" },
-        { "fieldPath": "activo", "order": "ASCENDING" },
-        { "fieldPath": "especialidades", "arrayConfig": "CONTAINS" }
+        {
+          "fieldPath": "rol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "disponible",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "activo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "especialidades",
+          "arrayConfig": "CONTAINS"
+        }
       ]
     },
     {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "rol", "order": "ASCENDING" },
-        { "fieldPath": "graciaExpiraAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "rol",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "graciaExpiraAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "citas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "fechaHora", "order": "ASCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaHora",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "citas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "fechaHora", "order": "ASCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaHora",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoUid", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "tecnicoUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "clienteUid", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "clienteUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "servicioId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "servicioId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoUid", "order": "ASCENDING" },
-        { "fieldPath": "tipo", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "tecnicoUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "facturas",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tipo", "order": "ASCENDING" },
-        { "fieldPath": "tecnicoUid", "order": "ASCENDING" },
-        { "fieldPath": "periodo", "order": "ASCENDING" }
+        {
+          "fieldPath": "tipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tecnicoUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "periodo",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "transacciones",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "tecnicoId", "order": "ASCENDING" },
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "tecnicoId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "transacciones",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "estado", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "admin_flags",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "estado",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

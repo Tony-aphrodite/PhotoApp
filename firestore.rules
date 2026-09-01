@@ -315,7 +315,19 @@ service cloud.firestore {
     // dispute triggers, etc.). Only admins read; only Cloud Functions write.
     match /admin_flags/{flagId} {
       allow read: if isAdmin();
-      allow create, update, delete: if false;
+
+      // Creation stays server-side only: a flag is evidence, and a client that
+      // could write one could also fabricate one.
+      allow create, delete: if false;
+
+      // An admin may only move the review state — mark an alert as reviewed,
+      // reopen it, or leave a note. Everything the Cloud Function recorded
+      // (who, when, the original text) is immutable, so the audit trail cannot
+      // be edited after the fact.
+      allow update: if isAdmin() &&
+                      request.resource.data.diff(resource.data).affectedKeys()
+                        .hasOnly(['estado', 'revisadoPor', 'revisadoAt', 'notaAdmin']) &&
+                      request.resource.data.estado in ['pendiente', 'revisada'];
     }
 
     // ===== VALIDACION_DOCUMENTOS (Technician Document Validation) =====

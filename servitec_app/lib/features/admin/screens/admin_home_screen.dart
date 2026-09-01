@@ -47,6 +47,19 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           SliverAppBar(
             expandedHeight: 160,
             actions: [
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.report_gmailerrorred_rounded,
+                      color: Colors.white),
+                  tooltip: 'Alertas y Quejas',
+                  onPressed: () => context.push('/admin/flags'),
+                ),
+              ),
               // AdminFinanceScreen was fully built and routed at
               // /admin/finance, but nothing in the app linked to it — the
               // revenue and commission dashboard was unreachable for an admin
