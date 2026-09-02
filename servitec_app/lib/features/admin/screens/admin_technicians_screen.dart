@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class AdminTechniciansScreen extends StatelessWidget {
   const AdminTechniciansScreen({super.key});
@@ -351,9 +351,7 @@ class AdminTechniciansScreen extends StatelessWidget {
                                                   ),
                                                 ),
                                                 child: Text(
-                                                  AppConstants
-                                                          .categoryLabels[
-                                                      e] ?? e,
+                                                  CategoryCatalog.label(e),
                                                   style: GoogleFonts
                                                       .plusJakartaSans(
                                                     fontSize: 10,

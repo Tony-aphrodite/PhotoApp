@@ -12,9 +12,11 @@ import '../features/client/screens/client_fiscal_screen.dart';
 import '../features/client/screens/create_service_screen.dart';
 import '../features/technician/screens/technician_home_screen.dart';
 import '../features/admin/screens/admin_home_screen.dart';
+import '../features/admin/screens/admin_categories_screen.dart';
 import '../features/admin/screens/admin_clients_screen.dart';
 import '../features/admin/screens/admin_facturas_screen.dart';
 import '../features/admin/screens/admin_flags_screen.dart';
+import '../features/admin/screens/admin_notifications_screen.dart';
 import '../features/admin/screens/admin_reviews_screen.dart';
 import '../features/admin/screens/admin_technicians_screen.dart';
 import '../features/admin/screens/assign_technician_screen.dart';
@@ -261,6 +263,14 @@ class AppRouter {
       GoRoute(
         path: '/admin/reviews',
         builder: (context, state) => const AdminReviewsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/categories',
+        builder: (context, state) => const AdminCategoriesScreen(),
+      ),
+      GoRoute(
+        path: '/admin/notifications',
+        builder: (context, state) => const AdminNotificationsScreen(),
       ),
       GoRoute(
         path: '/technician/fiscal',

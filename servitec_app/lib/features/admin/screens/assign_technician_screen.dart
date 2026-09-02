@@ -8,6 +8,7 @@ import '../../../data/models/user_model.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class AssignTechnicianScreen extends StatelessWidget {
   final String serviceId;
@@ -94,7 +95,7 @@ class AssignTechnicianScreen extends StatelessWidget {
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            '${AppConstants.categoryIcons[service.categoria] ?? ''} ${AppConstants.categoryLabels[service.categoria] ?? service.categoria}',
+                            '${CategoryCatalog.icon(service.categoria)} ${CategoryCatalog.label(service.categoria)}',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -178,7 +179,7 @@ class AssignTechnicianScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              'No hay tecnicos disponibles\npara ${AppConstants.categoryLabels[service.categoria]}',
+                              'No hay tecnicos disponibles\npara ${CategoryCatalog.label(service.categoria)}',
                               textAlign: TextAlign.center,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 15,
@@ -503,7 +504,7 @@ class _TechnicianCard extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  AppConstants.categoryLabels[e] ?? e,
+                                  CategoryCatalog.label(e),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,

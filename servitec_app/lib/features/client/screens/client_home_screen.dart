@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class ClientHomeScreen extends StatefulWidget {
   const ClientHomeScreen({super.key});
@@ -220,11 +220,11 @@ class _ClientHomeScreenState extends State<ClientHomeScreen>
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: AppConstants.serviceCategories.length,
+                itemCount: CategoryCatalog.activeKeys.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
-                  final cat = AppConstants.serviceCategories[index];
-                  final label = AppConstants.categoryLabels[cat] ?? cat;
+                  final cat = CategoryCatalog.activeKeys[index];
+                  final label = CategoryCatalog.label(cat);
                   final icon = _categoryIcons[cat] ?? Icons.handyman_rounded;
                   final gradColors = _categoryGradients[
                       index % _categoryGradients.length];

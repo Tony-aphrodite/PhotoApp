@@ -18,6 +18,7 @@ import '../../../data/repositories/factura_repository.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class ServiceDetailScreen extends StatefulWidget {
   final String serviceId;
@@ -287,7 +288,7 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
-                                    '${AppConstants.categoryIcons[service.categoria] ?? ''} ${AppConstants.categoryLabels[service.categoria] ?? service.categoria}',
+                                    '${CategoryCatalog.icon(service.categoria)} ${CategoryCatalog.label(service.categoria)}',
                                     style: GoogleFonts.plusJakartaSans(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,

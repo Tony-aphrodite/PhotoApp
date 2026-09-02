@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/repositories/config_repository.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class AdminTariffsScreen extends StatefulWidget {
   const AdminTariffsScreen({super.key});
@@ -64,13 +64,13 @@ class _AdminTariffsScreenState extends State<AdminTariffsScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  AppConstants.categoryIcons[category] ?? '',
+                  CategoryCatalog.icon(category),
                   style: const TextStyle(fontSize: 32),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                AppConstants.categoryLabels[category] ?? category,
+                CategoryCatalog.label(category),
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
@@ -316,8 +316,8 @@ class _AdminTariffsScreenState extends State<AdminTariffsScreen> {
                   final entry = _tarifas.entries.elementAt(index);
                   final cat = entry.key;
                   final tarifa = entry.value;
-                  final emoji = AppConstants.categoryIcons[cat] ?? '';
-                  final label = AppConstants.categoryLabels[cat] ?? cat;
+                  final emoji = CategoryCatalog.icon(cat);
+                  final label = CategoryCatalog.label(cat);
 
                   return Container(
                     margin: EdgeInsets.fromLTRB(

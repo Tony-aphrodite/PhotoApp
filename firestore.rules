@@ -330,6 +330,19 @@ service cloud.firestore {
                       request.resource.data.estado in ['pendiente', 'revisada'];
     }
 
+    // ===== NOTIFICACIONES_ADMIN (broadcast history) =====
+    // One row per push an admin sent, written by the sendAdminBroadcast
+    // callable after fan-out. Admins read the history; nobody writes from a
+    // client, so the log cannot be padded or edited.
+    match /notificaciones_admin/{id} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // ===== CATEGORIAS (in configuracion/categorias, admin-editable) =====
+    // Covered by the /configuracion rule above: everyone signed in reads,
+    // only admins write.
+
     // ===== VALIDACION_DOCUMENTOS (Technician Document Validation) =====
     match /validacion_documentos/{userId} {
       // Lectura: admin o el propio técnico

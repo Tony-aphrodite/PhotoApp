@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -479,13 +479,13 @@ class _RegisterScreenState extends State<RegisterScreen>
                               Wrap(
                                 spacing: 8,
                                 runSpacing: 8,
-                                children: AppConstants.serviceCategories.map((cat) {
+                                children: CategoryCatalog.activeKeys.map((cat) {
                                   final isSelected =
                                       _selectedEspecialidades.contains(cat);
                                   final label =
-                                      AppConstants.categoryLabels[cat] ?? cat;
+                                      CategoryCatalog.label(cat);
                                   final emoji =
-                                      AppConstants.categoryIcons[cat] ?? '';
+                                      CategoryCatalog.icon(cat);
                                   return GestureDetector(
                                     onTap: () {
                                       setState(() {

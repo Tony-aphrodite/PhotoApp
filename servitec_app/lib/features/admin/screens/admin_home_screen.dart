@@ -9,6 +9,7 @@ import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -112,6 +113,22 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       child: ListTile(
                         leading: Icon(Icons.tune_rounded),
                         title: Text('Configurar Tarifas'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/categories',
+                      child: ListTile(
+                        leading: Icon(Icons.category_outlined),
+                        title: Text('Categorías'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/notifications',
+                      child: ListTile(
+                        leading: Icon(Icons.campaign_outlined),
+                        title: Text('Notificaciones'),
                         dense: true,
                       ),
                     ),
@@ -362,9 +379,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       _resetDisplayLimit();
                     },
                   ),
-                  ...AppConstants.serviceCategories.map((cat) {
-                    final emoji = AppConstants.categoryIcons[cat] ?? '';
-                    final label = AppConstants.categoryLabels[cat] ?? cat;
+                  ...CategoryCatalog.activeKeys.map((cat) {
+                    final emoji = CategoryCatalog.icon(cat);
+                    final label = CategoryCatalog.label(cat);
                     return _FilterChip(
                       label: '$emoji $label',
                       isSelected: _categoryFilter == cat,

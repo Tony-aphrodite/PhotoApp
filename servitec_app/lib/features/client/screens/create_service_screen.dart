@@ -17,6 +17,7 @@ import '../../../data/repositories/storage_repository.dart';
 import '../../../data/repositories/config_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
+import '../../../core/utils/category_catalog.dart';
 
 class CreateServiceScreen extends StatefulWidget {
   final String? initialCategory;
@@ -576,11 +577,11 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
       spacing: 10,
       runSpacing: 10,
       children: List.generate(
-        AppConstants.serviceCategories.length,
+        CategoryCatalog.activeKeys.length,
         (index) {
-          final cat = AppConstants.serviceCategories[index];
+          final cat = CategoryCatalog.activeKeys[index];
           final isSelected = _selectedCategory == cat;
-          final label = AppConstants.categoryLabels[cat] ?? cat;
+          final label = CategoryCatalog.label(cat);
           final icon = _categoryIcons[cat] ?? Icons.handyman_rounded;
           final gradColors =
               _categoryGradients[index % _categoryGradients.length];

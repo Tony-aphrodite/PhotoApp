@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
@@ -49,6 +53,80 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
     _loadStats();
   }
 
+  bool _exporting = false;
+
+  /// Hands the current period's transactions to the share sheet as a CSV.
+  ///
+  /// CSV rather than PDF or Excel: it opens in Excel, Sheets and Numbers
+  /// without a library, and it is what an accountant asks for. The BOM makes
+  /// Excel read the file as UTF-8, so "Técnico" and "Comisión" keep their
+  /// accents instead of turning into mojibake.
+  Future<void> _exportCsv() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final txs = await context
+          .read<PaymentRepository>()
+          .getAllTransactionsByPeriod(_selectedPeriod)
+          .first;
+      if (txs.isEmpty) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('No hay transacciones en este periodo.')),
+        );
+        return;
+      }
+
+      String cell(Object? v) {
+        final t = v == null ? '' : v.toString();
+        return '"${t.replaceAll('"', '""')}"';
+      }
+
+      final fmt = DateFormat('yyyy-MM-dd HH:mm');
+      final buf = StringBuffer()
+        ..writeln([
+          'Fecha', 'Servicio', 'Cliente', 'Técnico', 'Monto total',
+          'Comisión ServiTec', 'Comisión Stripe', 'Neto técnico',
+          'Estado', 'Método de pago', 'Stripe PaymentIntent',
+        ].map(cell).join(','));
+      for (final t in txs) {
+        buf.writeln([
+          fmt.format(t.createdAt), t.servicioId, t.clienteId, t.tecnicoId,
+          t.montoTotal.toStringAsFixed(2),
+          t.comisionPlataforma.toStringAsFixed(2),
+          t.comisionStripe.toStringAsFixed(2),
+          t.montoTecnico.toStringAsFixed(2),
+          t.estado, t.metodoPago, t.stripePaymentIntentId,
+        ].map(cell).join(','));
+      }
+      // Totals row so the sheet is usable without touching it.
+      buf.writeln([
+        'TOTAL', '', '', '',
+        txs.fold<double>(0, (a, t) => a + t.montoTotal).toStringAsFixed(2),
+        txs.fold<double>(0, (a, t) => a + t.comisionPlataforma).toStringAsFixed(2),
+        txs.fold<double>(0, (a, t) => a + t.comisionStripe).toStringAsFixed(2),
+        txs.fold<double>(0, (a, t) => a + t.montoTecnico).toStringAsFixed(2),
+        '', '', '',
+      ].map(cell).join(','));
+
+      final bytes = Uint8List.fromList(utf8.encode('\uFEFF${buf.toString()}'));
+      final name =
+          'servitec_transacciones_${_selectedPeriod.name}_${DateFormat('yyyyMMdd').format(DateTime.now())}.csv';
+      await SharePlus.instance.share(ShareParams(
+        files: [XFile.fromData(bytes, name: name, mimeType: 'text/csv')],
+        subject: 'ServiTec — transacciones (${_selectedPeriod.label})',
+        text: '${txs.length} transacciones · ${_selectedPeriod.label}',
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo exportar: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,6 +149,28 @@ class _AdminFinanceScreenState extends State<AdminFinanceScreen> {
                     expandedHeight: 130,
                     floating: true,
                     pinned: true,
+                    actions: [
+                      Container(
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          icon: _exporting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Icon(Icons.download_rounded,
+                                  color: Colors.white),
+                          tooltip: 'Exportar CSV',
+                          onPressed: _exporting ? null : _exportCsv,
+                        ),
+                      ),
+                    ],
                     flexibleSpace: FlexibleSpaceBar(
                       background: Container(
                         padding:
