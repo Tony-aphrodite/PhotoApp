@@ -22,6 +22,20 @@ class FacturaRepository {
     return FacturaModel.fromFirestore(doc);
   }
 
+  /// Every factura on the platform, newest first. Admin-only by rules.
+  ///
+  /// [tipo] narrows to service CFDIs or commission CFDIs; null returns both.
+  Stream<List<FacturaModel>> streamAll({String? tipo, int limit = 200}) {
+    Query<Map<String, dynamic>> q = _ref;
+    if (tipo != null) q = q.where('tipo', isEqualTo: tipo);
+    return q
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snap) =>
+            snap.docs.map((d) => FacturaModel.fromFirestore(d)).toList());
+  }
+
   /// Facturas issued by / involving a técnico (either as emisor for CFDIs sold
   /// to clients, or as receptor for the monthly commission CFDIs).
   Stream<List<FacturaModel>> streamByTecnico(String tecnicoUid) {

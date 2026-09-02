@@ -27,6 +27,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final firebaseUser = _authRepository.currentUser;
       if (firebaseUser != null) {
         final user = await _authRepository.getUserProfile(firebaseUser.uid);
+        if (!user.activo) {
+          // Suspended since the last launch. The cached Firebase session is
+          // still valid, so without this check the account keeps working
+          // until the token expires.
+          await _authRepository.signOut();
+          emit(AuthError(_suspendedMessage));
+          return;
+        }
         emit(AuthAuthenticated(user));
       } else {
         emit(AuthUnauthenticated());
@@ -46,6 +54,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         email: event.email,
         password: event.password,
       );
+      if (!user.activo) {
+        await _authRepository.signOut();
+        emit(AuthError(_suspendedMessage));
+        return;
+      }
       emit(AuthAuthenticated(user));
     } catch (e) {
       emit(AuthError(_mapAuthError(e)));
@@ -111,6 +124,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthError(_mapAuthError(e)));
     }
   }
+
+  /// Shown when an admin has set `activo: false` on the account. Says who to
+  /// contact rather than why, since the reason is the admin's to give.
+  static const String _suspendedMessage =
+      'Esta cuenta está suspendida. Contacta a ServiTec para más información.';
 
   /// Turns an auth failure into something the user can act on.
   ///

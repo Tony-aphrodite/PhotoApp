@@ -7,7 +7,6 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/review_model.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
-import '../../../data/repositories/user_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
 
@@ -75,23 +74,11 @@ class _ReviewScreenState extends State<ReviewScreen>
           .collection('resenas')
           .add(review.toFirestore());
 
-      // Update technician rating
-      final reviewsSnap = await FirebaseFirestore.instance
-          .collection('resenas')
-          .where('tecnicoId', isEqualTo: _service!.tecnicoId)
-          .get();
-
-      double totalRating = 0;
-      for (final doc in reviewsSnap.docs) {
-        totalRating += (doc.data()['calificacion'] as num).toDouble();
-      }
-      final avgRating = totalRating / reviewsSnap.docs.length;
-
-      await context.read<UserRepository>().updateTechnicianRating(
-            _service!.tecnicoId!,
-            newRating: avgRating,
-            totalReviews: reviewsSnap.docs.length,
-          );
+      // The técnico's average is recomputed by the onReviewWritten Cloud
+      // Function. It used to be done here, but firestore.rules deny every
+      // client — reviewer included — from writing calificacionPromedio, so
+      // this step threw permission-denied on every review and the rating
+      // never moved. The review itself was saved; the user just saw an error.
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -49,6 +49,32 @@ class UserRepository {
             snapshot.docs.map((doc) => UserModel.fromFirestore(doc)).toList());
   }
 
+  /// Every cliente, newest first. Admin-only by firestore.rules (`allow list`
+  /// is admin or cliente; clientes are filtered to técnicos elsewhere).
+  Stream<List<UserModel>> getAllClients({int limit = 200}) {
+    return _usersRef
+        .where('rol', isEqualTo: AppConstants.roleClient)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.docs.map((doc) => UserModel.fromFirestore(doc)).toList());
+  }
+
+  /// Suspends or reactivates an account. Admin action.
+  ///
+  /// `activo` is distinct from a técnico's own `disponible` toggle: the técnico
+  /// controls whether they are taking jobs today, the admin controls whether
+  /// the account may operate at all. AuthBloc refuses to sign an inactive user
+  /// in, and every técnico-selection query already filters on it.
+  Future<void> setActivo(String uid, bool activo) async {
+    await _usersRef.doc(uid).update({
+      'activo': activo,
+      // A suspended técnico must not stay listed as available.
+      if (!activo) 'disponible': false,
+    });
+  }
+
   // Get all users (admin)
   Stream<List<UserModel>> getAllUsers() {
     return _usersRef.snapshots().map((snapshot) =>

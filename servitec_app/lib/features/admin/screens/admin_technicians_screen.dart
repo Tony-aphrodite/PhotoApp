@@ -239,8 +239,8 @@ class AdminTechniciansScreen extends StatelessWidget {
                                             const SizedBox(width: 4),
                                             Text(
                                               isAvailable
-                                                  ? 'Activo'
-                                                  : 'Inactivo',
+                                                  ? 'Disponible'
+                                                  : 'No disponible',
                                               style: GoogleFonts
                                                   .plusJakartaSans(
                                                 fontSize: 10,
@@ -254,6 +254,27 @@ class AdminTechniciansScreen extends StatelessWidget {
                                           ],
                                         ),
                                       ),
+                                      if (!tech.activo) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.errorColor
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(20),
+                                          ),
+                                          child: Text(
+                                            'Suspendido',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppTheme.errorColor,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 6),
@@ -349,6 +370,7 @@ class AdminTechniciansScreen extends StatelessWidget {
                                 ],
                               ),
                             ),
+                            _TechnicianMenu(tech: tech),
                           ],
                         ),
                       ),
@@ -360,6 +382,98 @@ class AdminTechniciansScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Suspend / reactivate. The account-level switch the admin owns — distinct
+/// from the técnico's own "disponible" toggle on their profile.
+class _TechnicianMenu extends StatelessWidget {
+  final UserModel tech;
+
+  const _TechnicianMenu({required this.tech});
+
+  Future<void> _confirm(BuildContext context) async {
+    final suspending = tech.activo;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        ),
+        title: Text(
+          suspending ? 'Suspender cuenta' : 'Reactivar cuenta',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          suspending
+              ? '${tech.fullName} no podrá iniciar sesión ni recibir servicios hasta que la reactives.'
+              : '${tech.fullName} podrá volver a iniciar sesión y recibir servicios.',
+          style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  suspending ? AppTheme.errorColor : AppTheme.successColor,
+            ),
+            child: Text(
+              suspending ? 'Suspender' : 'Reactivar',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<UserRepository>().setActivo(tech.uid, !suspending);
+      messenger.showSnackBar(SnackBar(
+        content: Text(suspending
+            ? 'Cuenta suspendida.'
+            : 'Cuenta reactivada.'),
+        backgroundColor: AppTheme.successColor,
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo actualizar: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert_rounded, color: AppTheme.textTertiary),
+      onSelected: (_) => _confirm(context),
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'toggle',
+          child: Row(
+            children: [
+              Icon(
+                tech.activo
+                    ? Icons.block_rounded
+                    : Icons.check_circle_outline_rounded,
+                size: 18,
+                color: tech.activo
+                    ? AppTheme.errorColor
+                    : AppTheme.successColor,
+              ),
+              const SizedBox(width: 10),
+              Text(tech.activo ? 'Suspender cuenta' : 'Reactivar cuenta'),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

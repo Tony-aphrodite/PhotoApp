@@ -74,6 +74,11 @@ class AppShell extends StatelessWidget {
           label: 'Tecnicos',
         ),
         _NavItem(
+          outlinedIcon: Icons.groups_outlined,
+          filledIcon: Icons.groups_rounded,
+          label: 'Clientes',
+        ),
+        _NavItem(
           outlinedIcon: Icons.person_outline_rounded,
           filledIcon: Icons.person_rounded,
           label: 'Perfil',

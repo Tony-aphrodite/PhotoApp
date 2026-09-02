@@ -12,7 +12,10 @@ import '../features/client/screens/client_fiscal_screen.dart';
 import '../features/client/screens/create_service_screen.dart';
 import '../features/technician/screens/technician_home_screen.dart';
 import '../features/admin/screens/admin_home_screen.dart';
+import '../features/admin/screens/admin_clients_screen.dart';
+import '../features/admin/screens/admin_facturas_screen.dart';
 import '../features/admin/screens/admin_flags_screen.dart';
+import '../features/admin/screens/admin_reviews_screen.dart';
 import '../features/admin/screens/admin_technicians_screen.dart';
 import '../features/admin/screens/assign_technician_screen.dart';
 import '../features/admin/screens/admin_tariffs_screen.dart';
@@ -152,6 +155,14 @@ class AppRouter {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/admin/clients',
+                builder: (context, state) => const AdminClientsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/admin/profile',
                 builder: (context, state) => const ProfileScreen(),
               ),
@@ -242,6 +253,14 @@ class AppRouter {
       GoRoute(
         path: '/admin/flags',
         builder: (context, state) => const AdminFlagsScreen(),
+      ),
+      GoRoute(
+        path: '/admin/facturas',
+        builder: (context, state) => const AdminFacturasScreen(),
+      ),
+      GoRoute(
+        path: '/admin/reviews',
+        builder: (context, state) => const AdminReviewsScreen(),
       ),
       GoRoute(
         path: '/technician/fiscal',

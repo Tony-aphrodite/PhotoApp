@@ -108,6 +108,21 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
+    // The técnico's completed-services counter. Clients cannot write it
+    // (firestore.rules protects it, correctly — it feeds assignment scoring),
+    // and nothing else server-side incremented it, so it sat at zero for
+    // everyone. A paid service is the one unambiguous "completed" signal.
+    // Keyed off the PaymentIntent id via the transaction doc above, so a
+    // redelivered webhook does not double-count.
+    if (!(await db.collection('transacciones').doc(pi.id).get()).data()?.contadoParaTecnico) {
+      await db.collection('users').doc(tecnicoUid).update({
+        serviciosCompletados: admin.firestore.FieldValue.increment(1),
+      });
+      await db.collection('transacciones').doc(pi.id).update({
+        contadoParaTecnico: true,
+      });
+    }
+
     // Advance the service to `pagado` so downstream flows (cron, admin view)
     // see it as completed and paid.
     await db.collection('servicios').doc(servicioId).update({

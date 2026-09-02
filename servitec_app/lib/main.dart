@@ -12,6 +12,7 @@ import 'data/repositories/config_repository.dart';
 import 'data/repositories/admin_flag_repository.dart';
 import 'data/repositories/factura_repository.dart';
 import 'data/repositories/payment_repository.dart';
+import 'data/repositories/review_repository.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
@@ -75,6 +76,7 @@ class ServiTecApp extends StatelessWidget {
     final paymentRepository = PaymentRepository();
     final facturaRepository = FacturaRepository();
     final adminFlagRepository = AdminFlagRepository();
+    final reviewRepository = ReviewRepository();
 
     // Create auth bloc
     final authBloc = AuthBloc(authRepository: authRepository)
@@ -93,6 +95,7 @@ class ServiTecApp extends StatelessWidget {
         RepositoryProvider.value(value: paymentRepository),
         RepositoryProvider.value(value: facturaRepository),
         RepositoryProvider.value(value: adminFlagRepository),
+        RepositoryProvider.value(value: reviewRepository),
       ],
       child: BlocProvider.value(
         value: authBloc,

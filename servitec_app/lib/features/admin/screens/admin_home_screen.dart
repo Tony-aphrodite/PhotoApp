@@ -47,8 +47,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           SliverAppBar(
             expandedHeight: 160,
             actions: [
+              // Alertas stays as its own button — it is the one an admin
+              // should check on every visit. Everything else lives in a menu:
+              // there are now eight tools and an app bar holds four icons
+              // before the title is pushed off a narrow phone.
               Container(
-                margin: const EdgeInsets.only(right: 8),
+                margin: const EdgeInsets.only(right: 6),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -60,45 +64,58 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   onPressed: () => context.push('/admin/flags'),
                 ),
               ),
-              // AdminFinanceScreen was fully built and routed at
-              // /admin/finance, but nothing in the app linked to it — the
-              // revenue and commission dashboard was unreachable for an admin
-              // who did not type the URL by hand.
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.insights_rounded, color: Colors.white),
-                  tooltip: 'Dashboard Financiero',
-                  onPressed: () => context.push('/admin/finance'),
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.verified_user_outlined,
-                      color: Colors.white),
-                  tooltip: 'Validar Tecnicos',
-                  onPressed: () => context.push('/admin/validation'),
-                ),
-              ),
               Container(
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: IconButton(
-                  icon: const Icon(Icons.tune_rounded, color: Colors.white),
-                  tooltip: 'Configurar Tarifas',
-                  onPressed: () => context.push('/admin/tariffs'),
+                child: PopupMenuButton<String>(
+                  icon: const Icon(Icons.grid_view_rounded, color: Colors.white),
+                  tooltip: 'Herramientas',
+                  onSelected: (route) => context.push(route),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: '/admin/finance',
+                      child: ListTile(
+                        leading: Icon(Icons.insights_rounded),
+                        title: Text('Dashboard Financiero'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/facturas',
+                      child: ListTile(
+                        leading: Icon(Icons.receipt_long_rounded),
+                        title: Text('Facturas (CFDI)'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/validation',
+                      child: ListTile(
+                        leading: Icon(Icons.verified_user_outlined),
+                        title: Text('Validar Técnicos'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/reviews',
+                      child: ListTile(
+                        leading: Icon(Icons.star_outline_rounded),
+                        title: Text('Calificaciones'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: '/admin/tariffs',
+                      child: ListTile(
+                        leading: Icon(Icons.tune_rounded),
+                        title: Text('Configurar Tarifas'),
+                        dense: true,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
