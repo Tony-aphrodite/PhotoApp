@@ -30,7 +30,7 @@ Expected time: **30–45 minutes** for the full happy-path plus a handful of edg
 3. Accept the disclosure.
    - **Expected**: same modal as cliente, plus a **fiscal banner** at the top of the technician home ("Completa tu registro fiscal — 60d restantes"), and a **Stripe banner** below it ("Enlaza tu cuenta bancaria").
 
-**Optionally (Admin)**: register a third account, then in Firestore Console set `users/{uid}.rol = "admin"` for it. Not required for the happy path.
+**Optionally (Admin)**: register a third account (any role), open **Perfil → Acceso de administrador**, and enter the setup code from `functions/.env` (`ADMIN_BOOTSTRAP_CODE`). No Firestore Console needed. Not required for the happy path.
 
 ---
 

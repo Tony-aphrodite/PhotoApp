@@ -25,6 +25,7 @@ export { onChatMessageCreated } from './chat-message-guard';
 export { onServiceCreated } from './service-lifecycle';
 export { onReviewWritten } from './review-rating';
 export { sendAdminBroadcast } from './admin-broadcast';
+export { bootstrapAdmin } from './admin-bootstrap';
 export { monthlyCommissionCron } from './monthly-commission-cron';
 export { gracePeriodDailyCron } from './grace-period-cron';
 export { appointmentReminderCron } from './appointment-reminder-cron';

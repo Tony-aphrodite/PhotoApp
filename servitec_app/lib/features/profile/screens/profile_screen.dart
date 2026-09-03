@@ -12,6 +12,8 @@ import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_event.dart';
 import '../../auth/bloc/auth_state.dart';
 import '../../../core/utils/category_catalog.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:go_router/go_router.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -504,12 +506,151 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
+                  if (!user.isAdmin) ...[
+                    const SizedBox(height: 12),
+                    _AdminBootstrapEntry(),
+                  ],
+
                   const SizedBox(height: 32),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Small, deliberately understated link to activate admin access with a
+/// setup code. Replaces the old workflow of hand-editing `users/{uid}.rol`
+/// in the Firestore console — that put a non-technical client in the
+/// position of editing raw database documents just to add a staff member.
+///
+/// Any signed-in cliente or técnico can see this button; it does nothing
+/// without the correct code, which only the platform owner holds
+/// (`bootstrapAdmin` on the server rejects anything else). Deliberately not
+/// hidden or hard to find — hiding it would only obscure the one legitimate
+/// path to admin access without adding real security, since the code itself
+/// is the actual gate.
+class _AdminBootstrapEntry extends StatelessWidget {
+  Future<void> _openDialog(BuildContext context) async {
+    final controller = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        ),
+        title: Text(
+          'Acceso de administrador',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Ingresa el código de administrador para activar el acceso en esta cuenta.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              decoration: InputDecoration(
+                labelText: 'Código',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onSubmitted: (v) => Navigator.pop(ctx, v),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final authBloc = context.read<AuthBloc>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+    );
+
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('bootstrapAdmin')
+          .call<Map<String, dynamic>>({'code': code.trim()});
+
+      if (context.mounted) Navigator.pop(context); // close the spinner
+
+      // Re-fetch the profile so AppShell sees the new rol before we route —
+      // routing first would show admin screens while the nav bar (which
+      // reads user.isAdmin) still thinks this is a cliente/técnico account.
+      authBloc.add(AuthCheckRequested());
+      await authBloc.stream.firstWhere(
+        (s) => s is AuthAuthenticated || s is AuthUnauthenticated || s is AuthError,
+      );
+
+      if (!context.mounted) return;
+      final already = result.data['alreadyAdmin'] == true;
+      messenger.showSnackBar(SnackBar(
+        content: Text(already
+            ? 'Esta cuenta ya tenía acceso de administrador.'
+            : 'Acceso de administrador activado.'),
+        backgroundColor: AppTheme.successColor,
+      ));
+      context.go('/admin');
+    } on FirebaseFunctionsException catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      messenger.showSnackBar(SnackBar(
+        content: Text(e.message ?? 'No se pudo activar (${e.code}).'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } catch (e) {
+      if (context.mounted) Navigator.pop(context);
+      messenger.showSnackBar(SnackBar(
+        content: Text('No se pudo activar: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: TextButton.icon(
+        onPressed: () => _openDialog(context),
+        icon: Icon(Icons.admin_panel_settings_outlined,
+            size: 16, color: AppTheme.textTertiary),
+        label: Text(
+          'Acceso de administrador',
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textTertiary,
+          ),
+        ),
       ),
     );
   }

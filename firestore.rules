@@ -39,7 +39,16 @@ service cloud.firestore {
         isCliente()
       );
 
-      allow create: if isAuthenticated();
+      // Creación: cualquier usuario autenticado puede crear SU PROPIO
+      // documento — pero nunca con rol 'admin'. Antes esto era
+      // `if isAuthenticated()` sin más, lo cual dejaba una vía real de
+      // escalación: cualquiera con el SDK de cliente (no solo desde la UI de
+      // la app) podía escribir rol: 'admin' directamente al registrarse. El
+      // único camino legítimo a 'admin' ahora es la función bootstrapAdmin,
+      // que usa el Admin SDK y por tanto omite estas reglas.
+      allow create: if isAuthenticated() &&
+                      request.auth.uid == userId &&
+                      request.resource.data.rol in ['cliente', 'tecnico'];
 
       // Actualización: propio perfil o admin
       // Campos calculados por Cloud Functions (rating, servicios completados,
@@ -328,6 +337,15 @@ service cloud.firestore {
                       request.resource.data.diff(resource.data).affectedKeys()
                         .hasOnly(['estado', 'revisadoPor', 'revisadoAt', 'notaAdmin']) &&
                       request.resource.data.estado in ['pendiente', 'revisada'];
+    }
+
+    // ===== ADMIN_BOOTSTRAP_LOG (who activated admin access, and when) =====
+    // Written by the bootstrapAdmin callable via the Admin SDK. Read-only for
+    // admins, so the client can audit who has admin access without a client
+    // ever being able to write or erase an entry.
+    match /admin_bootstrap_log/{id} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     // ===== NOTIFICACIONES_ADMIN (broadcast history) =====

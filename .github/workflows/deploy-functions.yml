@@ -14,6 +14,9 @@
 #   STRIPE_PLATFORM_ACCOUNT_ID    acct_...
 #   FACTURAPI_API_KEY             sk_test_... / sk_live_...
 #   FACTURAPI_SERVITEC_ORG_ID     FacturAPI parent organization id
+#   ADMIN_BOOTSTRAP_CODE          long random string — activates admin access
+#                                 in-app (Perfil → Acceso de administrador).
+#                                 Share only with people who should be admins.
 #
 # Deliberately manual (workflow_dispatch only). Deploying on every push to main
 # would ship half-finished work to a live payment system.
@@ -64,6 +67,7 @@ jobs:
           FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
           FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
           PLATFORM_COMMISSION_PCT=12
+          ADMIN_BOOTSTRAP_CODE=${{ secrets.ADMIN_BOOTSTRAP_CODE }}
           EOF
 
       - name: Fail early if the Stripe key is missing
