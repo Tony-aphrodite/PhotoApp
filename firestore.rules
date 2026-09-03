@@ -46,8 +46,8 @@ service cloud.firestore {
       // la app) podía escribir rol: 'admin' directamente al registrarse.
       //
       // Las cuentas de administrador no se crean desde la app. Se aprovisionan
-      // en el despliegue por scripts/seed-admin.js, que usa el Admin SDK y por
-      // tanto omite estas reglas. Ver ese archivo.
+      // en el despliegue por functions/scripts/seed-admin.js, que usa el Admin
+      // SDK y por tanto omite estas reglas. Ver ese archivo.
       allow create: if isAuthenticated() &&
                       request.auth.uid == userId &&
                       request.resource.data.rol in ['cliente', 'tecnico'];

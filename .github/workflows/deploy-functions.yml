@@ -124,14 +124,16 @@ jobs:
         # creates (or realigns) the one admin login using the Admin SDK, which
         # bypasses rules legitimately. Idempotent — safe on every deploy.
         #
-        # Runs from functions/ because that is where firebase-admin is already
-        # installed by `npm ci` above, and reuses GOOGLE_APPLICATION_CREDENTIALS
-        # from the auth step.
+        # Lives under functions/ because Node resolves `require` from the
+        # script's own directory upward — not from the working directory — so a
+        # script at the repo root could not see functions/node_modules, where
+        # `npm ci` above installs firebase-admin. Reuses
+        # GOOGLE_APPLICATION_CREDENTIALS from the auth step.
         working-directory: functions
         env:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-        run: node ../scripts/seed-admin.js
+        run: node scripts/seed-admin.js
 
       - name: Show the deployed function URLs
         if: success()

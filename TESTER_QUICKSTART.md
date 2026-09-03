@@ -30,7 +30,7 @@ Expected time: **30–45 minutes** for the full happy-path plus a handful of edg
 3. Accept the disclosure.
    - **Expected**: same modal as cliente, plus a **fiscal banner** at the top of the technician home ("Completa tu registro fiscal — 60d restantes"), and a **Stripe banner** below it ("Enlaza tu cuenta bancaria").
 
-**Optionally (Admin)**: don't register — the admin account already exists. Sign in on the normal login screen with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` credentials (provisioned automatically on deploy, see `scripts/seed-admin.js`) and the app opens the admin panel directly. Not required for the happy path.
+**Optionally (Admin)**: don't register — the admin account already exists. Sign in on the normal login screen with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` credentials (provisioned automatically on deploy, see `functions/scripts/seed-admin.js`) and the app opens the admin panel directly. Not required for the happy path.
 
 ---
 
