@@ -14,9 +14,11 @@
 #   STRIPE_PLATFORM_ACCOUNT_ID    acct_...
 #   FACTURAPI_API_KEY             sk_test_... / sk_live_...
 #   FACTURAPI_SERVITEC_ORG_ID     FacturAPI parent organization id
-#   ADMIN_BOOTSTRAP_CODE          long random string — activates admin access
-#                                 in-app (Perfil → Acceso de administrador).
-#                                 Share only with people who should be admins.
+#   ADMIN_EMAIL                   admin login email, provisioned on deploy
+#   ADMIN_PASSWORD                its password (min 6 chars). Changing this
+#                                 secret and redeploying resets the password.
+#                                 Both optional — if unset, provisioning is
+#                                 skipped and the deploy still succeeds.
 #
 # Deliberately manual (workflow_dispatch only). Deploying on every push to main
 # would ship half-finished work to a live payment system.
@@ -67,7 +69,6 @@ jobs:
           FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
           FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
           PLATFORM_COMMISSION_PCT=12
-          ADMIN_BOOTSTRAP_CODE=${{ secrets.ADMIN_BOOTSTRAP_CODE }}
           EOF
 
       - name: Fail early if the Stripe key is missing
@@ -116,6 +117,21 @@ jobs:
             exit 1
           fi
           echo "All requested functions deployed."
+
+      - name: Provision the admin account
+        # Admin accounts cannot be created from the app: firestore.rules forbid
+        # a client from ever writing rol: 'admin' on its own document. This step
+        # creates (or realigns) the one admin login using the Admin SDK, which
+        # bypasses rules legitimately. Idempotent — safe on every deploy.
+        #
+        # Runs from functions/ because that is where firebase-admin is already
+        # installed by `npm ci` above, and reuses GOOGLE_APPLICATION_CREDENTIALS
+        # from the auth step.
+        working-directory: functions
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: node ../scripts/seed-admin.js
 
       - name: Show the deployed function URLs
         if: success()
