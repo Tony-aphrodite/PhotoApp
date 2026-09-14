@@ -138,6 +138,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   /// it did not list, which hid the real cause during testing and left nothing
   /// to diagnose from.
   String _mapAuthError(dynamic error) {
+    if (error is PhoneAlreadyInUseException) {
+      return 'Este teléfono ya está registrado en otra cuenta. Inicia sesión o usa otro número.';
+    }
+    if (error is InvalidPhoneException) {
+      return 'Ingresa un teléfono de 10 dígitos';
+    }
+
     final code = error is FirebaseAuthException
         ? error.code
         : RegExp(r'\[firebase_auth/([a-z-]+)\]')

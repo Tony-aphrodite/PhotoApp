@@ -76,6 +76,9 @@ class AppConstants {
 
   // Firestore Collections
   static const String usersCollection = 'users';
+  // One doc per registered phone, id = 10 national digits. Enforces that a
+  // number belongs to a single account; see AuthRepository._createAccount.
+  static const String phoneClaimsCollection = 'telefonos';
   static const String servicesCollection = 'servicios';
   static const String reviewsCollection = 'resenas';
   static const String configCollection = 'configuracion';

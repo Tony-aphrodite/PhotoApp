@@ -98,6 +98,11 @@ class _LoginScreenState extends State<LoginScreen>
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: BlocListener<AuthBloc, AuthState>(
+        // Register and forgot-password are pushed on top of this screen and
+        // listen to the same bloc. Staying quiet while covered stops their
+        // errors from being shown a second time.
+        listenWhen: (_, state) =>
+            state is! AuthError || (ModalRoute.of(context)?.isCurrent ?? true),
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(

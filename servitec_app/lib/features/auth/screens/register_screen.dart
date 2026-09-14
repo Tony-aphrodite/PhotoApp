@@ -8,6 +8,7 @@ import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
 import '../../../core/utils/category_catalog.dart';
+import '../../../core/utils/registration_validators.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -173,6 +174,11 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     return Scaffold(
       body: BlocListener<AuthBloc, AuthState>(
+        // Only the screen on top reports. Login stays mounted underneath this
+        // one and listens to the same bloc, and both share the app's
+        // ScaffoldMessenger — without this guard every error showed twice.
+        listenWhen: (_, state) =>
+            state is AuthError && (ModalRoute.of(context)?.isCurrent ?? true),
         listener: (context, state) {
           if (state is AuthError) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -342,8 +348,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                     icon: Icons.person_outline_rounded,
                                     textInputAction: TextInputAction.next,
                                     onSubmitted: (_) => _apellidoFocus.requestFocus(),
-                                    validator: (v) =>
-                                        v == null || v.isEmpty ? 'Requerido' : null,
+                                    validator: RegistrationValidators.name,
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -356,8 +361,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                     icon: Icons.person_outline_rounded,
                                     textInputAction: TextInputAction.next,
                                     onSubmitted: (_) => _emailFocus.requestFocus(),
-                                    validator: (v) =>
-                                        v == null || v.isEmpty ? 'Requerido' : null,
+                                    validator: RegistrationValidators.name,
                                   ),
                                 ),
                               ],
@@ -374,11 +378,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
                               onSubmitted: (_) => _telefonoFocus.requestFocus(),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Requerido';
-                                if (!v.contains('@')) return 'Correo inv\u00e1lido';
-                                return null;
-                              },
+                              validator: RegistrationValidators.email,
                             ),
 
                             const SizedBox(height: 16),
@@ -392,8 +392,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                               keyboardType: TextInputType.phone,
                               textInputAction: TextInputAction.next,
                               onSubmitted: (_) => _passwordFocus.requestFocus(),
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? 'Requerido' : null,
+                              validator: RegistrationValidators.phone,
                             ),
 
                             const SizedBox(height: 16),

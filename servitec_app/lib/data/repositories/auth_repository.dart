@@ -6,6 +6,17 @@ import '../../core/constants/app_constants.dart';
 import '../../core/services/analytics_service.dart';
 import '../../core/utils/fiscal_status.dart';
 import '../../core/utils/notification_service.dart';
+import '../../core/utils/registration_validators.dart';
+
+/// The phone number is already claimed by another account.
+class PhoneAlreadyInUseException implements Exception {
+  const PhoneAlreadyInUseException();
+}
+
+/// The phone number is not a valid 10-digit Mexican number.
+class InvalidPhoneException implements Exception {
+  const InvalidPhoneException();
+}
 
 class AuthRepository {
   final FirebaseAuth _auth;
@@ -52,27 +63,21 @@ class AuthRepository {
     required String apellido,
     required String telefono,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+    final userModel = await _createAccount(
       email: email,
       password: password,
-    );
-    final user = credential.user;
-    if (user == null) throw Exception('Registration failed');
-
-    final userModel = UserModel(
-      uid: user.uid,
-      email: email,
-      nombre: nombre,
-      apellido: apellido,
       telefono: telefono,
-      rol: AppConstants.roleClient,
-      createdAt: DateTime.now(),
+      buildProfile: (uid, phone, now) => UserModel(
+        uid: uid,
+        email: email,
+        nombre: nombre,
+        apellido: apellido,
+        telefono: phone,
+        rol: AppConstants.roleClient,
+        createdAt: now,
+      ),
     );
-
-    await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(user.uid)
-        .set(userModel.toFirestore());
+    final user = _auth.currentUser!;
 
     // Analytics: sign_up event + identify.
     await AnalyticsService.setUserId(user.uid);
@@ -92,37 +97,30 @@ class AuthRepository {
     required List<String> especialidades,
     Map<String, double>? tarifas,
   }) async {
-    final credential = await _auth.createUserWithEmailAndPassword(
+    final userModel = await _createAccount(
       email: email,
       password: password,
-    );
-    final user = credential.user;
-    if (user == null) throw Exception('Registration failed');
-
-    final now = DateTime.now();
-    final userModel = UserModel(
-      uid: user.uid,
-      email: email,
-      nombre: nombre,
-      apellido: apellido,
       telefono: telefono,
-      rol: AppConstants.roleTechnician,
-      createdAt: now,
-      especialidades: especialidades,
-      calificacionPromedio: 0.0,
-      totalResenas: 0,
-      tarifasPorEspecialidad: tarifas ?? {},
-      disponible: true,
-      serviciosCompletados: 0,
-      // Fiscal defaults for a new técnico: grace period starts now.
-      facturapi: FiscalStatus.initial(now: now),
-      graciaExpiraAt: FiscalStatus.initialGraceExpiry(now: now),
+      buildProfile: (uid, phone, now) => UserModel(
+        uid: uid,
+        email: email,
+        nombre: nombre,
+        apellido: apellido,
+        telefono: phone,
+        rol: AppConstants.roleTechnician,
+        createdAt: now,
+        especialidades: especialidades,
+        calificacionPromedio: 0.0,
+        totalResenas: 0,
+        tarifasPorEspecialidad: tarifas ?? {},
+        disponible: true,
+        serviciosCompletados: 0,
+        // Fiscal defaults for a new técnico: grace period starts now.
+        facturapi: FiscalStatus.initial(now: now),
+        graciaExpiraAt: FiscalStatus.initialGraceExpiry(now: now),
+      ),
     );
-
-    await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(user.uid)
-        .set(userModel.toFirestore());
+    final user = _auth.currentUser!;
 
     // Analytics: sign_up event + identify + initial technician_status.
     await AnalyticsService.setUserId(user.uid);
@@ -133,6 +131,69 @@ class AuthRepository {
     await AnalyticsService.logSignUp(role: AppConstants.roleTechnician);
     await NotificationService().saveTokenToUser(user.uid);
 
+    return userModel;
+  }
+
+  /// Creates the Auth user, then writes the profile and claims the phone
+  /// number in one atomic batch.
+  ///
+  /// The claim is a `telefonos/{10 digits}` document. firestore.rules only let
+  /// it be *created*, so if another account already holds the number the
+  /// write lands as an update, is refused, and the whole batch — profile
+  /// included — is rejected. That makes the uniqueness check race-free and
+  /// impossible to skip from a modified client, without ever letting anyone
+  /// read who owns which number.
+  ///
+  /// If the batch fails for any reason the Auth user is deleted again. Before,
+  /// a failed profile write left an account that could sign in but had no
+  /// profile, and its email could never be registered again.
+  Future<UserModel> _createAccount({
+    required String email,
+    required String password,
+    required String telefono,
+    required UserModel Function(String uid, String phone, DateTime now)
+        buildProfile,
+  }) async {
+    // The form validates first, so this only trips for a caller that skipped it.
+    final phone = RegistrationValidators.normalizeMxPhone(telefono);
+    if (phone == null) throw const InvalidPhoneException();
+
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    final user = credential.user;
+    if (user == null) throw Exception('Registration failed');
+
+    final userModel = buildProfile(user.uid, phone, DateTime.now());
+    final batch = _firestore.batch()
+      ..set(
+        _firestore.collection(AppConstants.usersCollection).doc(user.uid),
+        userModel.toFirestore(),
+      )
+      ..set(
+        _firestore.collection(AppConstants.phoneClaimsCollection).doc(phone),
+        {'uid': user.uid, 'createdAt': FieldValue.serverTimestamp()},
+      );
+
+    try {
+      await batch.commit();
+    } catch (e) {
+      try {
+        await user.delete();
+      } catch (_) {
+        // Deleting a user seconds after creating it does not need a fresh
+        // login, so this should not fail. If it does, signing out at least
+        // keeps the half-made session from being used.
+        await _auth.signOut();
+      }
+      // A profile write refused by rules is, in practice, the phone claim:
+      // the users/{uid} create rule is otherwise satisfied by construction.
+      if (e is FirebaseException && e.code == 'permission-denied') {
+        throw const PhoneAlreadyInUseException();
+      }
+      rethrow;
+    }
     return userModel;
   }
 

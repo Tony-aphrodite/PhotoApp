@@ -135,6 +135,13 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: node scripts/seed-admin.js
 
+      - name: Claim phone numbers of existing accounts
+        # Registration enforces one account per phone through telefonos/{phone}.
+        # Accounts older than that rule have no claim; this creates them.
+        # Idempotent, never edits users. See the script header.
+        working-directory: functions
+        run: node scripts/backfill-phone-claims.js
+
       - name: Show the deployed function URLs
         if: success()
         run: |

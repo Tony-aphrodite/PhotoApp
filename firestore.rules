@@ -48,9 +48,16 @@ service cloud.firestore {
       // Las cuentas de administrador no se crean desde la app. Se aprovisionan
       // en el despliegue por functions/scripts/seed-admin.js, que usa el Admin
       // SDK y por tanto omite estas reglas. Ver ese archivo.
+      //
+      // Además, el teléfono debe quedar reclamado por esta misma cuenta en
+      // telefonos/{telefono} dentro del mismo batch (ver esa colección). Sin
+      // esto, una cuenta podía registrarse con el número de otra.
       allow create: if isAuthenticated() &&
                       request.auth.uid == userId &&
-                      request.resource.data.rol in ['cliente', 'tecnico'];
+                      request.resource.data.rol in ['cliente', 'tecnico'] &&
+                      request.resource.data.telefono is string &&
+                      request.resource.data.telefono.matches('^[2-9][0-9]{9}$') &&
+                      getAfter(/databases/$(database)/documents/telefonos/$(request.resource.data.telefono)).data.uid == request.auth.uid;
 
       // Actualización: propio perfil o admin
       // Campos calculados por Cloud Functions (rating, servicios completados,
@@ -61,6 +68,9 @@ service cloud.firestore {
       ) && !request.resource.data.diff(resource.data).affectedKeys()
           .hasAny([
             'rol',
+            // Cambiarlo esquivaría la unicidad de telefonos/. No hay pantalla
+            // para editarlo; si se necesita, debe hacerse en el servidor.
+            'telefono',
             'calificacionPromedio',
             'totalResenas',
             'serviciosCompletados',
@@ -70,6 +80,27 @@ service cloud.firestore {
           ]);
 
       allow delete: if isAdmin();
+    }
+
+    // ===== TELEFONOS COLLECTION =====
+    // Un documento por teléfono registrado; el id son los 10 dígitos
+    // nacionales. Garantiza que un número pertenezca a una sola cuenta.
+    //
+    // Solo se permite CREAR. Si el número ya tiene dueño, la escritura cuenta
+    // como actualización, se rechaza, y con ella todo el batch del registro.
+    // Nadie puede leerlos desde la app, así que no sirven para averiguar si un
+    // número está registrado ni de quién es.
+    //
+    // Los teléfonos de usuarios anteriores a esta regla se reclaman con
+    // functions/scripts/backfill-phone-claims.js (paso del despliegue).
+    match /telefonos/{telefono} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() &&
+                      telefono.matches('^[2-9][0-9]{9}$') &&
+                      request.resource.data.keys().hasOnly(['uid', 'createdAt']) &&
+                      request.resource.data.uid == request.auth.uid &&
+                      getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.telefono == telefono;
+      allow update, delete: if false;
     }
 
     // ===== SERVICIOS COLLECTION =====
