@@ -38,6 +38,11 @@ export const setupTechnicianFiscal = onCall<SetupTechnicianFiscalInput>(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     }
+    // The app holds unverified accounts on its verification screen; this
+    // keeps a direct call to the endpoint from skipping that.
+    if (req.auth?.token.email_verified !== true) {
+      throw new HttpsError('failed-precondition', 'Verifica tu correo antes de continuar.');
+    }
 
     const {
       rfc,

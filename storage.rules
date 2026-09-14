@@ -13,6 +13,13 @@ service firebase.storage {
     // 8 MiB ceiling: the app uploads JPEGs resized to a 1600 px long edge,
     // which land around 250-400 KB. The margin absorbs an unusually large
     // photo; anything above it is not a phone camera image.
+    // Uploads cost storage and bandwidth, so an account must have confirmed
+    // its email first — the same gate firestore.rules put on every activity
+    // write. Reads and deletes of one's own files stay open.
+    function isVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
     function isImageUpload() {
       return request.resource.contentType.matches('image/.*')
              && request.resource.size < 8 * 1024 * 1024;
@@ -43,21 +50,21 @@ service firebase.storage {
     // Path: servicios/{servicioId}/{uid}/{uuid}.jpg  (+ _thumb.jpg)
     match /servicios/{servicioId}/{uid}/{fileName} {
       allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isImageUpload();
+      allow create, update: if isOwner(uid) && isVerified() && isImageUpload();
       allow delete: if isOwner(uid);
     }
 
     // Images sent inside a service chat.
     match /chat/{servicioId}/{uid}/{fileName} {
       allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isImageUpload();
+      allow create, update: if isOwner(uid) && isVerified() && isImageUpload();
       allow delete: if isOwner(uid);
     }
 
     // Profile photos.
     match /usuarios/{uid}/perfil/{fileName} {
       allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isImageUpload();
+      allow create, update: if isOwner(uid) && isVerified() && isImageUpload();
       allow delete: if isOwner(uid);
     }
 
@@ -68,7 +75,7 @@ service firebase.storage {
     // the técnico themselves.
     match /usuarios/{uid}/documentos/{documentKey}/{fileName} {
       allow read: if isOwner(uid);
-      allow create, update: if isOwner(uid) && isImageUpload();
+      allow create, update: if isOwner(uid) && isVerified() && isImageUpload();
       allow delete: if isOwner(uid);
     }
 

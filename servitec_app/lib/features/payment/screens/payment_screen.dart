@@ -80,11 +80,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       final paymentRepo = context.read<PaymentRepository>();
 
-      // 1. Create PaymentIntent via Cloud Function
+      // 1. Create PaymentIntent. The server prices the service itself.
       final pi = await paymentRepo.createPaymentIntent(
         servicioId: _service!.id,
-        amount: _breakdown!.montoTotal,
-        currency: 'mxn',
       );
 
       // 2. Initialize payment sheet
@@ -99,46 +97,22 @@ class _PaymentScreenState extends State<PaymentScreen> {
       // 3. Present payment sheet
       await Stripe.instance.presentPaymentSheet();
 
-      // 4. Optimistic client-side record (idempotent via PaymentIntent id).
-      //    The webhook is the source of truth; this just gives the UI instant
-      //    feedback before Stripe → webhook → Firestore propagation completes.
-      await paymentRepo.recordPayment(
-        servicioId: _service!.id,
-        clienteId: _service!.clienteId,
-        tecnicoId: _service!.tecnicoId!,
-        montoTotal: _breakdown!.montoTotal,
-        comisionPlataforma: _breakdown!.comisionPlataforma,
-        comisionStripe: _breakdown!.comisionStripe,
-        montoTecnico: _breakdown!.montoTecnico,
-        stripePaymentIntentId: pi.paymentIntentId,
-      );
+      // 4. Nothing to write here. Stripe notifies the webhook, which records
+      //    the transaction, moves the service to `pagado`, posts the
+      //    "Pago recibido" message and stamps the CFDI. The service detail
+      //    screen is a live stream, so it updates by itself seconds later.
 
-      // 5. Narrate the payment in the service chat thread.
-      if (mounted) {
-        await context.read<ServiceRepository>().postSystemMessage(
-              _service!.id,
-              'Pago recibido — ${CurrencyFormatter.format(_breakdown!.montoTotal)}. Comisión plataforma: ${CurrencyFormatter.format(_breakdown!.comisionPlataforma)}.',
-              metadata: {
-                'event': 'payment_received',
-                'montoTotal': _breakdown!.montoTotal,
-                'comisionPlataforma': _breakdown!.comisionPlataforma,
-                'montoTecnico': _breakdown!.montoTecnico,
-              },
-            );
-      }
-
-      // 6. Analytics — GA4 built-in purchase event (reports as revenue and
-      //    integrates with any MMP that maps from Firebase Analytics).
+      // 5. Analytics — GA4 built-in purchase event.
       await AnalyticsService.logPurchase(
         servicioId: _service!.id,
-        amount: _breakdown!.montoTotal,
-        platformCommission: _breakdown!.comisionPlataforma,
+        amount: pi.amountMxn,
+        platformCommission: pi.amountMxn * _breakdown!.porcentajePlataforma / 100,
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pago exitoso'),
+            content: Text('Pago exitoso. Tu servicio se actualizará en unos segundos.'),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -149,6 +123,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.error.localizedMessage ?? 'Error en el pago'),
+            backgroundColor: AppTheme.errorColor,
+          ),
+        );
+      }
+    } on PaymentException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
             backgroundColor: AppTheme.errorColor,
           ),
         );

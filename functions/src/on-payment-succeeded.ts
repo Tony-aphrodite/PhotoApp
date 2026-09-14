@@ -121,6 +121,29 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       await db.collection('transacciones').doc(pi.id).update({
         contadoParaTecnico: true,
       });
+
+      // Narrate the payment once, from here. The app used to post this after
+      // its own bookkeeping write — which firestore.rules refuse — so it
+      // never got that far. Inside this block so a redelivered webhook does
+      // not post it twice.
+      await db
+        .collection('servicios')
+        .doc(servicioId)
+        .collection('mensajes')
+        .add({
+          userId: 'system',
+          nombreUsuario: 'ServiTec',
+          mensaje: `Pago recibido — $${totalMxn.toFixed(2)} MXN. Comisión plataforma: $${platformFeeMxn.toFixed(2)} MXN.`,
+          tipo: 'sistema',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          leido: false,
+          metadata: {
+            event: 'payment_received',
+            montoTotal: totalMxn,
+            comisionPlataforma: platformFeeMxn,
+            montoTecnico: tecnicoNetMxn,
+          },
+        });
     }
 
     // Advance the service to `pagado` so downstream flows (cron, admin view)

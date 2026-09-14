@@ -19,13 +19,45 @@
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
-import { db } from './lib/admin';
+import { db, admin } from './lib/admin';
 import { stripe, applicationFeeCentavos } from './lib/stripe';
 
 interface CreatePaymentIntentBody {
   servicioId?: string;
-  amount?: number;      // integer, centavos (MXN)
-  currency?: string;    // e.g. 'mxn'
+}
+
+/** States in which the cliente is shown the "Pagar" button. */
+const PAYABLE_STATES = ['completado', 'pago_pendiente'];
+
+/**
+ * What the service costs, decided here and never taken from the request.
+ *
+ * This endpoint used to charge whatever `amount` the app sent, with no sign-in
+ * check at all — anyone who knew a service id could have it marked paid for
+ * one peso, with a CFDI to match. The price now comes from, in order:
+ *   1. the approved cotización's total — written by the técnico, and the
+ *      figure the cliente agreed to;
+ *   2. `costoFinal` on the service — firestore.rules keep clients from
+ *      writing it;
+ *   3. `estimacionCosto` — the tariff-based estimate shown when the request
+ *      was created.
+ */
+async function serviceAmountCentavos(
+  servicioId: string,
+  service: FirebaseFirestore.DocumentData,
+): Promise<number> {
+  const approved = await db
+    .collection('cotizaciones')
+    .where('servicioId', '==', servicioId)
+    .where('estado', '==', 'aprobada')
+    .limit(1)
+    .get();
+  const mxn =
+    (approved.empty ? undefined : (approved.docs[0].get('total') as number)) ??
+    (service.costoFinal as number | undefined) ??
+    (service.estimacionCosto as number | undefined) ??
+    0;
+  return Math.round(mxn * 100);
 }
 
 export const createPaymentIntent = onRequest(
@@ -36,13 +68,26 @@ export const createPaymentIntent = onRequest(
       return;
     }
 
-    const body = (req.body || {}) as CreatePaymentIntentBody;
-    const { servicioId, amount, currency = 'mxn' } = body;
+    // A plain HTTPS function has no built-in auth, so verify the Firebase ID
+    // token the app sends by hand.
+    const match = /^Bearer (.+)$/.exec(req.get('Authorization') || '');
+    let token: admin.auth.DecodedIdToken;
+    try {
+      if (!match) throw new Error('missing token');
+      token = await admin.auth().verifyIdToken(match[1]);
+    } catch {
+      res.status(401).json({ error: 'Debes iniciar sesión.', code: 'unauthenticated' });
+      return;
+    }
+    if (!token.email_verified) {
+      res.status(403).json({ error: 'Verifica tu correo antes de pagar.', code: 'email_not_verified' });
+      return;
+    }
 
-    if (!servicioId || !amount || amount <= 0) {
-      res.status(400).json({
-        error: 'servicioId and positive amount (centavos) are required',
-      });
+    const { servicioId } = (req.body || {}) as CreatePaymentIntentBody;
+    const currency = 'mxn';
+    if (!servicioId) {
+      res.status(400).json({ error: 'servicioId is required' });
       return;
     }
 
@@ -54,6 +99,28 @@ export const createPaymentIntent = onRequest(
         return;
       }
       const service = serviceSnap.data()!;
+
+      if (service.clienteId !== token.uid) {
+        res.status(403).json({ error: 'Solo el cliente del servicio puede pagarlo.', code: 'not_owner' });
+        return;
+      }
+      if (!PAYABLE_STATES.includes(service.estado as string)) {
+        res.status(409).json({
+          error: service.estado === 'pagado'
+            ? 'Este servicio ya está pagado.'
+            : 'El servicio todavía no está listo para pagarse.',
+          code: 'not_payable',
+        });
+        return;
+      }
+
+      const amount = await serviceAmountCentavos(servicioId, service);
+      // Stripe's MXN minimum is $10.00.
+      if (amount < 1000) {
+        res.status(400).json({ error: 'El servicio no tiene un monto válido para cobrar.', code: 'no_amount' });
+        return;
+      }
+
       const tecnicoUid = service.tecnicoId as string | undefined;
       if (!tecnicoUid) {
         res.status(400).json({ error: 'Service has no assigned técnico' });
@@ -97,6 +164,7 @@ export const createPaymentIntent = onRequest(
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,
         paymentIntentId: paymentIntent.id,
+        amount,
         applicationFeeAmount: feeCentavos,
         currency,
       });

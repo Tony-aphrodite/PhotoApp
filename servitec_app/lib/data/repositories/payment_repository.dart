@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
 import '../../core/constants/app_constants.dart';
@@ -17,32 +18,42 @@ class PaymentRepository {
   CollectionReference get _transactionsRef =>
       _firestore.collection(AppConstants.transactionsCollection);
 
-  /// Create a PaymentIntent via Cloud Function. Returns both the `clientSecret`
-  /// (used to present Stripe's PaymentSheet) and the `paymentIntentId` (used
-  /// as the idempotency key for the transaction document — see [recordPayment]).
+  /// Create a PaymentIntent via Cloud Function. Returns the `clientSecret`
+  /// used to present Stripe's PaymentSheet.
+  ///
+  /// There is deliberately no client-side bookkeeping after a payment: the
+  /// transaction row and the `pagado` state are written only by the Stripe
+  /// webhook (on-payment-succeeded), which firestore.rules reserve them for.
+  ///
+  /// The server decides the amount from the service itself; the app only says
+  /// which service. The ID token proves who is paying — the function refuses
+  /// anyone but the service's cliente.
   Future<PaymentIntentCreation> createPaymentIntent({
     required String servicioId,
-    required double amount,
-    required String currency,
   }) async {
+    final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+    if (idToken == null) throw const PaymentException('Debes iniciar sesión.');
+
     final response = await http.post(
       Uri.parse('$_cloudFunctionBaseUrl/createPaymentIntent'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'servicioId': servicioId,
-        'amount': (amount * 100).round(), // Stripe uses cents
-        'currency': currency,
-      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $idToken',
+      },
+      body: jsonEncode({'servicioId': servicioId}),
     );
 
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
     if (response.statusCode != 200) {
-      throw Exception('Failed to create payment intent: ${response.body}');
+      throw PaymentException(
+        (data['error'] as String?) ?? 'No se pudo iniciar el pago.',
+      );
     }
 
-    final data = jsonDecode(response.body) as Map<String, dynamic>;
     return PaymentIntentCreation(
       clientSecret: data['clientSecret'] as String,
       paymentIntentId: data['paymentIntentId'] as String,
+      amountMxn: (data['amount'] as num).toDouble() / 100,
     );
   }
 
@@ -264,71 +275,6 @@ class PaymentRepository {
       'updatedAt': Timestamp.now(),
     });
   }
-
-  /// Optimistic client-side write after Stripe confirms the payment.
-  ///
-  /// The `stripePaymentIntentId` is REQUIRED and doubles as the transaction
-  /// document id — this makes the write idempotent so that the Cloud Function
-  /// webhook's authoritative write (from `on-payment-succeeded`) converges to
-  /// the same document rather than creating a duplicate row.
-  ///
-  /// The webhook is the source of truth; this client write just gives the UI
-  /// instant feedback (the earnings screen shows the transaction right away
-  /// instead of waiting for Stripe → webhook → Firestore propagation).
-  Future<void> recordPayment({
-    required String servicioId,
-    required String clienteId,
-    required String tecnicoId,
-    required double montoTotal,
-    required double comisionPlataforma,
-    required double comisionStripe,
-    required double montoTecnico,
-    required String stripePaymentIntentId,
-  }) async {
-    final batch = _firestore.batch();
-
-    // Transaction — keyed by PaymentIntent id (idempotent with webhook).
-    final txRef = _transactionsRef.doc(stripePaymentIntentId);
-    batch.set(
-      txRef,
-      {
-        'servicioId': servicioId,
-        'clienteId': clienteId,
-        'tecnicoId': tecnicoId,
-        'montoTotal': montoTotal,
-        'comisionPlataforma': comisionPlataforma,
-        'comisionStripe': comisionStripe,
-        'montoTecnico': montoTecnico,
-        'stripePaymentIntentId': stripePaymentIntentId,
-        'estado': 'completado',
-        'createdAt': Timestamp.now(),
-        'completedAt': Timestamp.now(),
-      },
-      SetOptions(merge: true),
-    );
-
-    // Service — the webhook will also stamp this, but doing it here gives
-    // the UI an immediate transition. `merge` avoids clobbering any fields
-    // the webhook may have set first.
-    final serviceRef = _firestore
-        .collection(AppConstants.servicesCollection)
-        .doc(servicioId);
-    batch.set(
-      serviceRef,
-      {
-        'estado': AppConstants.statusPaid,
-        'montoPagado': montoTotal,
-        'comisionPlataforma': comisionPlataforma,
-        'montoTecnico': montoTecnico,
-        'estadoPago': 'pagado',
-        'stripePaymentIntentId': stripePaymentIntentId,
-        'updatedAt': Timestamp.now(),
-      },
-      SetOptions(merge: true),
-    );
-
-    await batch.commit();
-  }
 }
 
 /// Result of [PaymentRepository.createPaymentIntent].
@@ -336,10 +282,23 @@ class PaymentIntentCreation {
   final String clientSecret;
   final String paymentIntentId;
 
+  /// What Stripe will actually charge, as decided by the server.
+  final double amountMxn;
+
   const PaymentIntentCreation({
     required this.clientSecret,
     required this.paymentIntentId,
+    required this.amountMxn,
   });
+}
+
+/// A payment could not be started; [message] is safe to show the user.
+class PaymentException implements Exception {
+  final String message;
+  const PaymentException(this.message);
+
+  @override
+  String toString() => message;
 }
 
 enum EarningPeriod { week, month, year, all }
