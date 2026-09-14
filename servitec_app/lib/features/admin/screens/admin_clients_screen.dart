@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/repositories/account_admin_repository.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../widgets/account_admin_widgets.dart';
 
 /// Every registered cliente, with the admin's account-level switch.
 ///
@@ -133,8 +135,11 @@ class _AdminClientsScreenState extends State<AdminClientsScreen> {
                   child: Center(child: Text('Error: ${snapshot.error}')),
                 );
               }
-              final clients =
-                  (snapshot.data ?? const <UserModel>[]).where(_matches).toList();
+              final all = snapshot.data ?? const <UserModel>[];
+              context
+                  .read<AccountAdminRepository>()
+                  .ensureStatus(all.map((u) => u.uid));
+              final clients = all.where(_matches).toList();
               if (clients.isEmpty) {
                 return SliverFillRemaining(
                   child: Center(
@@ -272,6 +277,8 @@ class _ClientCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    const SizedBox(width: 6),
+                    UnverifiedEmailBadge(uid: client.uid),
                     if (!client.activo) ...[
                       const SizedBox(width: 8),
                       Container(
@@ -314,8 +321,11 @@ class _ClientCard extends StatelessWidget {
           ),
           PopupMenuButton<String>(
             icon: Icon(Icons.more_vert_rounded, color: AppTheme.textTertiary),
-            onSelected: (_) => _toggle(context),
+            onSelected: (action) => action == 'release_phone'
+                ? confirmAndReleasePhone(context, client)
+                : _toggle(context),
             itemBuilder: (_) => [
+              releasePhoneMenuItem(),
               PopupMenuItem(
                 value: 'toggle',
                 child: Row(

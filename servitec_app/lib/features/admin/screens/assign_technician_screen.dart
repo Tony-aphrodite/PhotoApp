@@ -6,7 +6,9 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/service_model.dart';
+import '../../../data/repositories/account_admin_repository.dart';
 import '../../../data/repositories/service_repository.dart';
+import '../widgets/account_admin_widgets.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../../core/utils/category_catalog.dart';
 
@@ -65,8 +67,7 @@ class AssignTechnicianScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF0A2E36)
-                          .withValues(alpha: 0.3),
+                      color: const Color(0xFF0A2E36).withValues(alpha: 0.3),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -89,7 +90,9 @@ class AssignTechnicianScreen extends StatelessWidget {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(20),
@@ -108,9 +111,11 @@ class AssignTechnicianScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.location_on_outlined,
-                            size: 14,
-                            color: Colors.white.withValues(alpha: 0.6)),
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 14,
+                          color: Colors.white.withValues(alpha: 0.6),
+                        ),
                         const SizedBox(width: 4),
                         Flexible(
                           child: Text(
@@ -148,8 +153,7 @@ class AssignTechnicianScreen extends StatelessWidget {
                 child: StreamBuilder<List<UserModel>>(
                   stream: context
                       .read<UserRepository>()
-                      .getAvailableTechnicians(
-                          especialidad: service.categoria),
+                      .getAvailableTechnicians(especialidad: service.categoria),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(
@@ -161,6 +165,8 @@ class AssignTechnicianScreen extends StatelessWidget {
                     }
 
                     final technicians = snapshot.data ?? [];
+                    final accounts = context.read<AccountAdminRepository>();
+                    accounts.ensureStatus(technicians.map((t) => t.uid));
 
                     if (technicians.isEmpty) {
                       return Center(
@@ -170,12 +176,16 @@ class AssignTechnicianScreen extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: AppTheme.textTertiary
-                                    .withValues(alpha: 0.08),
+                                color: AppTheme.textTertiary.withValues(
+                                  alpha: 0.08,
+                                ),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(Icons.person_off_outlined,
-                                  size: 48, color: AppTheme.textTertiary),
+                              child: Icon(
+                                Icons.person_off_outlined,
+                                size: 48,
+                                color: AppTheme.textTertiary,
+                              ),
                             ),
                             const SizedBox(height: 16),
                             Text(
@@ -193,134 +203,152 @@ class AssignTechnicianScreen extends StatelessWidget {
                       );
                     }
 
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: technicians.length,
-                      itemBuilder: (context, index) {
-                        final tech = technicians[index];
-                        return _TechnicianCard(
-                          technician: tech,
-                          onAssign: () async {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => Dialog(
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(16),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF14BDAC)
-                                              .withValues(alpha: 0.1),
-                                          shape: BoxShape.circle,
+                    return ValueListenableBuilder<Map<String, bool>>(
+                      valueListenable: accounts.emailVerified,
+                      builder: (context, verified, _) => ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: technicians.length,
+                        itemBuilder: (context, index) {
+                          final tech = technicians[index];
+                          return _TechnicianCard(
+                            technician: tech,
+                            // Server-side auto-assignment skips these too: the
+                            // técnico is held on the verification screen and
+                            // could not act on the job.
+                            unverified: verified[tech.uid] == false,
+                            onAssign: () async {
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => Dialog(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF14BDAC,
+                                            ).withValues(alpha: 0.1),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(
+                                            Icons.person_add_rounded,
+                                            color: Color(0xFF0A6B6E),
+                                            size: 32,
+                                          ),
                                         ),
-                                        child: const Icon(
-                                          Icons.person_add_rounded,
-                                          color: Color(0xFF0A6B6E),
-                                          size: 32,
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'Confirmar Asignacion',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            letterSpacing: -0.3,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Confirmar Asignacion',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.3,
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Asignar a ${tech.fullName} para este servicio?',
+                                          textAlign: TextAlign.center,
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 14,
+                                            color: AppTheme.textSecondary,
+                                            letterSpacing: -0.2,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Asignar a ${tech.fullName} para este servicio?',
-                                        textAlign: TextAlign.center,
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 14,
-                                          color: AppTheme.textSecondary,
-                                          letterSpacing: -0.2,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: TextButton(
-                                              onPressed: () =>
-                                                  Navigator.pop(ctx, false),
-                                              style: TextButton.styleFrom(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        vertical: 12),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          12),
-                                                  side: const BorderSide(
-                                                      color: AppTheme
-                                                          .dividerColor),
+                                        const SizedBox(height: 24),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, false),
+                                                style: TextButton.styleFrom(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 12,
+                                                      ),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    side: const BorderSide(
+                                                      color:
+                                                          AppTheme.dividerColor,
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                              child: Text(
-                                                'Cancelar',
-                                                style: GoogleFonts
-                                                    .plusJakartaSans(
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      AppTheme.textSecondary,
+                                                child: Text(
+                                                  'Cancelar',
+                                                  style:
+                                                      GoogleFonts.plusJakartaSans(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: AppTheme
+                                                            .textSecondary,
+                                                      ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Container(
-                                              decoration: BoxDecoration(
-                                                gradient:
-                                                    const LinearGradient(
-                                                  colors: [
-                                                    Color(0xFF0D7377),
-                                                    Color(0xFF14BDAC),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  gradient:
+                                                      const LinearGradient(
+                                                        colors: [
+                                                          Color(0xFF0D7377),
+                                                          Color(0xFF14BDAC),
+                                                        ],
+                                                      ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: const Color(
+                                                        0xFF14BDAC,
+                                                      ).withValues(alpha: 0.3),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(
+                                                        0,
+                                                        3,
+                                                      ),
+                                                    ),
                                                   ],
                                                 ),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: const Color(
-                                                            0xFF14BDAC)
-                                                        .withValues(
-                                                            alpha: 0.3),
-                                                    blurRadius: 8,
-                                                    offset:
-                                                        const Offset(0, 3),
-                                                  ),
-                                                ],
-                                              ),
-                                              child: Material(
-                                                color: Colors.transparent,
-                                                child: InkWell(
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                          12),
-                                                  onTap: () =>
-                                                      Navigator.pop(
-                                                          ctx, true),
-                                                  child: Padding(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        vertical: 12),
-                                                    child: Center(
-                                                      child: Text(
-                                                        'Asignar',
-                                                        style: GoogleFonts
-                                                            .plusJakartaSans(
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          color: Colors.white,
+                                                child: Material(
+                                                  color: Colors.transparent,
+                                                  child: InkWell(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                    onTap: () => Navigator.pop(
+                                                      ctx,
+                                                      true,
+                                                    ),
+                                                    child: Padding(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            vertical: 12,
+                                                          ),
+                                                      child: Center(
+                                                        child: Text(
+                                                          'Asignar',
+                                                          style:
+                                                              GoogleFonts.plusJakartaSans(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
                                                         ),
                                                       ),
                                                     ),
@@ -328,48 +356,47 @@ class AssignTechnicianScreen extends StatelessWidget {
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                          ],
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
+                              );
 
-                            if (confirmed == true && context.mounted) {
-                              await context
-                                  .read<ServiceRepository>()
-                                  .assignTechnician(
-                                    serviceId: serviceId,
-                                    technicianId: tech.uid,
-                                    technicianName: tech.fullName,
-                                    assignmentType:
-                                        AppConstants.assignmentAdmin,
-                                  );
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Tecnico ${tech.fullName} asignado',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontWeight: FontWeight.w600,
+                              if (confirmed == true && context.mounted) {
+                                await context
+                                    .read<ServiceRepository>()
+                                    .assignTechnician(
+                                      serviceId: serviceId,
+                                      technicianId: tech.uid,
+                                      technicianName: tech.fullName,
+                                      assignmentType:
+                                          AppConstants.assignmentAdmin,
+                                    );
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Tecnico ${tech.fullName} asignado',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      backgroundColor: AppTheme.successColor,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
-                                    backgroundColor: AppTheme.successColor,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius:
-                                          BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                );
-                                context.pop();
+                                  );
+                                  context.pop();
+                                }
                               }
-                            }
-                          },
-                        );
-                      },
+                            },
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
@@ -385,10 +412,12 @@ class AssignTechnicianScreen extends StatelessWidget {
 class _TechnicianCard extends StatelessWidget {
   final UserModel technician;
   final VoidCallback onAssign;
+  final bool unverified;
 
   const _TechnicianCard({
     required this.technician,
     required this.onAssign,
+    this.unverified = false,
   });
 
   @override
@@ -458,16 +487,24 @@ class _TechnicianCard extends StatelessWidget {
                     children: [
                       ...List.generate(5, (i) {
                         if (i < ratingVal.floor()) {
-                          return const Icon(Icons.star_rounded,
-                              size: 13, color: Colors.amber);
+                          return const Icon(
+                            Icons.star_rounded,
+                            size: 13,
+                            color: Colors.amber,
+                          );
                         } else if (i < ratingVal.ceil() &&
                             ratingVal % 1 >= 0.5) {
-                          return const Icon(Icons.star_half_rounded,
-                              size: 13, color: Colors.amber);
-                        }
-                        return Icon(Icons.star_outline_rounded,
+                          return const Icon(
+                            Icons.star_half_rounded,
                             size: 13,
-                            color: Colors.amber.withValues(alpha: 0.4));
+                            color: Colors.amber,
+                          );
+                        }
+                        return Icon(
+                          Icons.star_outline_rounded,
+                          size: 13,
+                          color: Colors.amber.withValues(alpha: 0.4),
+                        );
                       }),
                       const SizedBox(width: 4),
                       Text(
@@ -495,23 +532,28 @@ class _TechnicianCard extends StatelessWidget {
                       runSpacing: 2,
                       children: technician.especialidades!
                           .take(3)
-                          .map((e) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0A6B6E)
-                                      .withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(6),
+                          .map(
+                            (e) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF0A6B6E,
+                                ).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                CategoryCatalog.label(e),
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF0A6B6E),
                                 ),
-                                child: Text(
-                                  CategoryCatalog.label(e),
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF0A6B6E),
-                                  ),
-                                ),
-                              ))
+                              ),
+                            ),
+                          )
                           .toList(),
                     ),
                   ],
@@ -519,42 +561,47 @@ class _TechnicianCard extends StatelessWidget {
               ),
             ),
 
-            // Assign button (gradient)
-            Container(
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color:
-                        const Color(0xFF14BDAC).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
+            // Assign button (gradient), replaced by the reason when the
+            // técnico cannot take the job.
+            if (unverified)
+              UnverifiedEmailBadge(uid: technician.uid)
+            else
+              Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF0D7377), Color(0xFF14BDAC)],
                   ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
                   borderRadius: BorderRadius.circular(12),
-                  onTap: onAssign,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    child: Text(
-                      'Asignar',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF14BDAC).withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: onAssign,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Text(
+                        'Asignar',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

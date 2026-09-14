@@ -123,6 +123,8 @@ class AdminFlagModel extends Equatable {
         return 'Falló la generación del CFDI';
       case typeCommissionCfdiFailed:
         return 'Falló el CFDI de comisión mensual';
+      case 'phone_released':
+        return 'Teléfono liberado por un administrador';
       default:
         return type;
     }

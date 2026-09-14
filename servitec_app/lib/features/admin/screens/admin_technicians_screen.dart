@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/user_model.dart';
+import '../../../data/repositories/account_admin_repository.dart';
 import '../../../data/repositories/user_repository.dart';
+import '../widgets/account_admin_widgets.dart';
 import '../../../core/utils/category_catalog.dart';
 
 class AdminTechniciansScreen extends StatelessWidget {
@@ -94,6 +96,9 @@ class AdminTechniciansScreen extends StatelessWidget {
                 }
 
                 final technicians = snapshot.data ?? [];
+                context
+                    .read<AccountAdminRepository>()
+                    .ensureStatus(technicians.map((t) => t.uid));
 
                 if (technicians.isEmpty) {
                   return Padding(
@@ -277,6 +282,12 @@ class AdminTechniciansScreen extends StatelessWidget {
                                       ],
                                     ],
                                   ),
+                                  // Own line: the row above already carries
+                                  // the availability and suspension chips.
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: UnverifiedEmailBadge(uid: tech.uid),
+                                  ),
                                   const SizedBox(height: 6),
                                   // Rating stars + services
                                   Row(
@@ -451,8 +462,11 @@ class _TechnicianMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
       icon: Icon(Icons.more_vert_rounded, color: AppTheme.textTertiary),
-      onSelected: (_) => _confirm(context),
+      onSelected: (action) => action == 'release_phone'
+          ? confirmAndReleasePhone(context, tech)
+          : _confirm(context),
       itemBuilder: (_) => [
+        releasePhoneMenuItem(),
         PopupMenuItem(
           value: 'toggle',
           child: Row(
