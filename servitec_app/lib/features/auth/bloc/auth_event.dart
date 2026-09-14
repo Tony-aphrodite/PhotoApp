@@ -9,6 +9,9 @@ abstract class AuthEvent extends Equatable {
 
 class AuthCheckRequested extends AuthEvent {}
 
+/// The verification screen confirmed the email is now verified.
+class AuthEmailVerified extends AuthEvent {}
+
 class AuthSignInRequested extends AuthEvent {
   final String email;
   final String password;

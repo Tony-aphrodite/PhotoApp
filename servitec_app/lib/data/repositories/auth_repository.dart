@@ -197,6 +197,43 @@ class AuthRepository {
     return userModel;
   }
 
+  /// Whether the signed-in account still has to confirm its email.
+  ///
+  /// Admins are exempt: their account is provisioned server-side with
+  /// `emailVerified: true` already, and locking the only admin out behind an
+  /// inbox would be a support incident, not a security gain.
+  bool needsEmailVerification(UserModel profile) {
+    final user = _auth.currentUser;
+    return user != null && !user.emailVerified && !profile.isAdmin;
+  }
+
+  /// Sends the verification link, in Spanish.
+  Future<void> sendEmailVerification() async {
+    final user = _auth.currentUser;
+    if (user == null || user.emailVerified) return;
+    await _auth.setLanguageCode('es');
+    await user.sendEmailVerification();
+  }
+
+  /// Re-reads the account from Firebase and reports whether the email is now
+  /// verified.
+  ///
+  /// `emailVerified` on the cached user never changes by itself after the link
+  /// is clicked in a browser, hence the reload. On success the ID token is
+  /// force-refreshed too: firestore.rules read `email_verified` from the
+  /// token, and a stale one would keep denying writes for up to an hour.
+  Future<bool> reloadEmailVerified() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    await user.reload();
+    final fresh = _auth.currentUser;
+    if (fresh == null || !fresh.emailVerified) return false;
+    await fresh.getIdToken(true);
+    return true;
+  }
+
+  String? get currentEmail => _auth.currentUser?.email;
+
   Future<UserModel> getUserProfile(String uid) async {
     final doc = await _firestore
         .collection(AppConstants.usersCollection)

@@ -21,6 +21,17 @@ class AuthAuthenticated extends AuthState {
   List<Object?> get props => [user];
 }
 
+/// Signed in with a valid profile, but the email link has not been clicked.
+/// The router keeps the account on the verification screen until it is.
+class AuthEmailUnverified extends AuthState {
+  final UserModel user;
+
+  const AuthEmailUnverified(this.user);
+
+  @override
+  List<Object?> get props => [user];
+}
+
 class AuthUnauthenticated extends AuthState {}
 
 class AuthError extends AuthState {

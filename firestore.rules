@@ -7,6 +7,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Correo confirmado. La app ya retiene a las cuentas sin verificar en su
+    // pantalla de verificación; esto lo hace valer también para quien use el
+    // SDK directamente. Se exige en las acciones que generan actividad
+    // (servicios, mensajes, cotizaciones, citas, reseñas, documentos), no en
+    // el registro: el perfil se crea antes de que llegue el correo.
+    // El admin se aprovisiona con emailVerified: true.
+    function isVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
     function getUserRole() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.rol;
     }
@@ -115,7 +125,7 @@ service cloud.firestore {
       // Creación: clientes o admin
       // Cliente puede seleccionar técnico al crear (tipoAsignacion = "cliente")
       // o dejar sin técnico para asignación automática/admin
-      allow create: if isAuthenticated() && (isCliente() || isAdmin()) &&
+      allow create: if isAuthenticated() && isVerified() && (isCliente() || isAdmin()) &&
                       request.resource.data.estado == 'pendiente' &&
                       request.resource.data.tipoAsignacion in ['cliente', 'automatica', 'admin'];
 
@@ -204,7 +214,7 @@ service cloud.firestore {
           get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
         );
 
-        allow create: if isAuthenticated() && (
+        allow create: if isAuthenticated() && isVerified() && (
           isAdmin() ||
           get(/databases/$(database)/documents/servicios/$(servicioId)).data.clienteId == request.auth.uid ||
           get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid
@@ -231,7 +241,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
 
       // Creación: solo el cliente del servicio completado
-      allow create: if isAuthenticated() &&
+      allow create: if isAuthenticated() && isVerified() &&
                       isCliente() &&
                       request.resource.data.clienteId == request.auth.uid &&
                       request.resource.data.keys().hasAll(['servicioId', 'clienteId', 'tecnicoId', 'calificacion']) &&
@@ -275,7 +285,7 @@ service cloud.firestore {
       );
 
       // Creación: solo técnicos asignados al servicio
-      allow create: if isAuthenticated() &&
+      allow create: if isAuthenticated() && isVerified() &&
                       isTecnico() &&
                       request.resource.data.tecnicoId == request.auth.uid &&
                       request.resource.data.estado == 'pendiente';
@@ -308,7 +318,7 @@ service cloud.firestore {
       );
 
       // Creación: clientes autenticados
-      allow create: if isAuthenticated() &&
+      allow create: if isAuthenticated() && isVerified() &&
                       (isCliente() || isAdmin()) &&
                       request.resource.data.estado == 'programada';
 
@@ -394,10 +404,10 @@ service cloud.firestore {
       );
 
       // Creación/Actualización: técnico sube sus documentos, admin aprueba/rechaza
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && isVerified() && request.auth.uid == userId;
 
       allow update: if isAuthenticated() && (
-        request.auth.uid == userId ||
+        (request.auth.uid == userId && isVerified()) ||
         isAdmin()
       );
 

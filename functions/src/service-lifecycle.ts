@@ -54,7 +54,14 @@ function distanceKm(
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Técnicos who are active, available, and hold the required specialty. */
+/**
+ * Técnicos who are active, available, hold the required specialty, and have
+ * verified their email.
+ *
+ * Verification lives on the Auth user, not the profile, so it is looked up in
+ * one batched getUsers() call per 100 candidates. An unverified técnico is held
+ * on the app's verification screen and could not act on a job it was given.
+ */
 async function eligibleTechnicians(
   categoria: string,
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
@@ -65,7 +72,14 @@ async function eligibleTechnicians(
     .where('activo', '==', true)
     .where('especialidades', 'array-contains', categoria)
     .get();
-  return snap.docs;
+
+  const verified = new Set<string>();
+  for (let i = 0; i < snap.docs.length; i += 100) {
+    const chunk = snap.docs.slice(i, i + 100).map((d) => ({ uid: d.id }));
+    const { users } = await admin.auth().getUsers(chunk);
+    users.filter((u) => u.emailVerified).forEach((u) => verified.add(u.uid));
+  }
+  return snap.docs.filter((d) => verified.has(d.id));
 }
 
 async function notifyAdmins(

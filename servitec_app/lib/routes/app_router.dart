@@ -6,6 +6,7 @@ import '../features/auth/bloc/auth_state.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/forgot_password_screen.dart';
+import '../features/auth/screens/verify_email_screen.dart';
 import '../features/client/screens/client_home_screen.dart';
 import '../features/client/screens/client_services_screen.dart';
 import '../features/client/screens/client_fiscal_screen.dart';
@@ -48,6 +49,15 @@ class AppRouter {
     refreshListenable: GoRouterRefreshStream(authBloc.stream),
     redirect: (context, state) {
       final authState = authBloc.state;
+
+      // An unverified account may be nowhere but the verification screen, and
+      // nobody else has any business on it.
+      const verifyRoute = '/verify-email';
+      if (authState is AuthEmailUnverified) {
+        return state.matchedLocation == verifyRoute ? null : verifyRoute;
+      }
+      if (state.matchedLocation == verifyRoute) return '/login';
+
       final isLoggedIn = authState is AuthAuthenticated;
       final isAuthRoute = state.matchedLocation == '/login' ||
           state.matchedLocation == '/register' ||
@@ -75,6 +85,10 @@ class AppRouter {
       GoRoute(
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => const VerifyEmailScreen(),
       ),
 
       // Client shell

@@ -19,15 +19,17 @@ Expected time: **30–45 minutes** for the full happy-path plus a handful of edg
 
 **Device A (Cliente):**
 1. Install the APK, open the app.
-2. Register a new account, pick **Cliente** role.
-3. The **onboarding disclosure modal** should appear immediately after first login. Read it and tap "Entendido y acepto".
+2. Register a new account, pick **Cliente** role. Use a **real inbox you can open** — the phone must be 10 digits and not used by any other account.
+3. The app opens **Verifica tu correo**. Open the link in the email (check spam), then come back to the app — it notices on its own; **Ya lo verifiqué** forces the check. Until then the account cannot create services, send messages, or receive assignments.
+4. The **onboarding disclosure modal** should appear immediately after first login. Read it and tap "Entendido y acepto".
    - **Expected**: Modal disappears, doesn't come back on subsequent launches.
    - **Verify in Firestore**: `users/{uid}.disclosureAcceptedAt` is populated.
 
 **Device B (Técnico):**
 1. Install the APK, open the app.
 2. Register a new account, pick **Técnico** role, add at least one specialty (e.g., `limpieza`).
-3. Accept the disclosure.
+3. Verify the email the same way. An unverified técnico is skipped by auto-assignment.
+4. Accept the disclosure.
    - **Expected**: same modal as cliente, plus a **fiscal banner** at the top of the technician home ("Completa tu registro fiscal — 60d restantes"), and a **Stripe banner** below it ("Enlaza tu cuenta bancaria").
 
 **Optionally (Admin)**: don't register — the admin account already exists. Sign in on the normal login screen with the `ADMIN_EMAIL` / `ADMIN_PASSWORD` credentials (provisioned automatically on deploy, see `functions/scripts/seed-admin.js`) and the app opens the admin panel directly. Not required for the happy path.

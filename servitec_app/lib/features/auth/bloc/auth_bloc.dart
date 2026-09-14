@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
@@ -16,7 +17,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<AuthRegisterTechnicianRequested>(_onRegisterTechnicianRequested);
     on<AuthSignOutRequested>(_onSignOutRequested);
     on<AuthResetPasswordRequested>(_onResetPasswordRequested);
+    on<AuthEmailVerified>(_onEmailVerified);
   }
+
+  /// The one place that decides where a signed-in account lands: the app, or
+  /// the verification screen first.
+  AuthState _signedIn(UserModel user) =>
+      _authRepository.needsEmailVerification(user)
+          ? AuthEmailUnverified(user)
+          : AuthAuthenticated(user);
 
   Future<void> _onCheckRequested(
     AuthCheckRequested event,
@@ -26,6 +35,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final firebaseUser = _authRepository.currentUser;
       if (firebaseUser != null) {
+        // Picks up a link clicked while the app was closed; the cached user
+        // would otherwise still say unverified. Offline is fine — the cached
+        // value is used and the verification screen can re-check later.
+        if (!firebaseUser.emailVerified) {
+          try {
+            await _authRepository.reloadEmailVerified();
+          } catch (_) {}
+        }
         final user = await _authRepository.getUserProfile(firebaseUser.uid);
         if (!user.activo) {
           // Suspended since the last launch. The cached Firebase session is
@@ -35,7 +52,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(AuthError(_suspendedMessage));
           return;
         }
-        emit(AuthAuthenticated(user));
+        emit(_signedIn(user));
       } else {
         emit(AuthUnauthenticated());
       }
@@ -59,7 +76,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(AuthError(_suspendedMessage));
         return;
       }
-      emit(AuthAuthenticated(user));
+      emit(_signedIn(user));
     } catch (e) {
       emit(AuthError(_mapAuthError(e)));
     }
@@ -78,7 +95,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         apellido: event.apellido,
         telefono: event.telefono,
       );
-      emit(AuthAuthenticated(user));
+      await _sendVerificationQuietly();
+      emit(_signedIn(user));
     } catch (e) {
       emit(AuthError(_mapAuthError(e)));
     }
@@ -98,7 +116,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         telefono: event.telefono,
         especialidades: event.especialidades,
       );
-      emit(AuthAuthenticated(user));
+      await _sendVerificationQuietly();
+      emit(_signedIn(user));
+    } catch (e) {
+      emit(AuthError(_mapAuthError(e)));
+    }
+  }
+
+  /// The account exists at this point; a failed send must not look like a
+  /// failed registration. The verification screen offers a resend.
+  Future<void> _sendVerificationQuietly() async {
+    try {
+      await _authRepository.sendEmailVerification();
+    } catch (_) {}
+  }
+
+  Future<void> _onEmailVerified(
+    AuthEmailVerified event,
+    Emitter<AuthState> emit,
+  ) async {
+    // No AuthLoading here: the router treats every non-signed-in state as
+    // "send to /login", which would throw the user off the verification
+    // screen for the length of this fetch.
+    final uid = _authRepository.currentUser?.uid;
+    if (uid == null) {
+      emit(AuthUnauthenticated());
+      return;
+    }
+    try {
+      final user = await _authRepository.getUserProfile(uid);
+      emit(_signedIn(user));
     } catch (e) {
       emit(AuthError(_mapAuthError(e)));
     }
