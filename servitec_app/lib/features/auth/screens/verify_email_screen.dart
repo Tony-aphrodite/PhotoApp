@@ -196,7 +196,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen>
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '¿No lo ves? Revisa la carpeta de spam o correo no deseado.',
+                    '¿No lo ves? Revisa la carpeta de spam o correo no deseado.\n'
+                    'Las cuentas sin verificar se eliminan después de 7 días.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 13,
