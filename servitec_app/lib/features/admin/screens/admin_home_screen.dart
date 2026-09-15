@@ -19,7 +19,20 @@ class AdminHomeScreen extends StatefulWidget {
 }
 
 class _AdminHomeScreenState extends State<AdminHomeScreen> {
+  /// Selected dashboard filter; a key of [_statusGroups], or null for all.
   String? _statusFilter;
+
+  /// Each filter chip covers every flow state in its stage.
+  static const Map<String, List<String>> _statusGroups = {
+    AppConstants.statusPending: [AppConstants.statusPending],
+    AppConstants.statusAssigned: AppConstants.preWorkStates,
+    AppConstants.statusInProgress: AppConstants.workStates,
+    AppConstants.statusCompleted: AppConstants.doneStates,
+    AppConstants.statusDisputed: [
+      AppConstants.statusStopped,
+      AppConstants.statusDisputed,
+    ],
+  };
   String? _categoryFilter;
   final _searchController = TextEditingController();
   String _searchQuery = '';
@@ -192,11 +205,11 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                     .length;
                 final active = services
                     .where((s) =>
-                        s.estado == AppConstants.statusAssigned ||
-                        s.estado == AppConstants.statusInProgress)
+                        AppConstants.preWorkStates.contains(s.estado) ||
+                        AppConstants.workStates.contains(s.estado))
                     .length;
                 final completed = services
-                    .where((s) => s.estado == AppConstants.statusCompleted)
+                    .where((s) => AppConstants.doneStates.contains(s.estado))
                     .length;
 
                 return Padding(
@@ -302,6 +315,16 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                         _resetDisplayLimit();
                       },
                     ),
+                    _FilterChip(
+                      label: 'Detenidos',
+                      isSelected:
+                          _statusFilter == AppConstants.statusDisputed,
+                      onTap: () {
+                        setState(() =>
+                            _statusFilter = AppConstants.statusDisputed);
+                        _resetDisplayLimit();
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -400,7 +423,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
           StreamBuilder<List<ServiceModel>>(
             stream: context
                 .read<ServiceRepository>()
-                .getAllServices(statusFilter: _statusFilter),
+                .getAllServices(statusIn: _statusGroups[_statusFilter]),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SliverFillRemaining(

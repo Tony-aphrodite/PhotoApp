@@ -59,6 +59,40 @@ class AppConstants {
   static const String statusPaymentPending = 'pago_pendiente';
   static const String statusPaid = 'pagado';
 
+  // Quotation and work flow. The server owns these transitions — see
+  // functions/src/lib/service-flow-rules.ts, which must use the same names.
+  static const String statusQuoteSent = 'cotizacion_enviada';
+  static const String statusQuoteRejected = 'cotizacion_rechazada';
+  static const String statusQuoteApproved = 'cotizacion_aprobada';
+  static const String statusRevisionSent = 'revision_enviada';
+  static const String statusRevisionRejected = 'revision_rechazada';
+  static const String statusStopped = 'detenido';
+  static const String statusDisputed = 'en_disputa';
+
+  /// Assigned, but work has not started: quoting and approval.
+  static const List<String> preWorkStates = [
+    statusAssigned,
+    statusQuoteSent,
+    statusQuoteRejected,
+    statusQuoteApproved,
+  ];
+
+  /// Work under way, including a pending revision or a stop being settled.
+  static const List<String> workStates = [
+    statusInProgress,
+    statusRevisionSent,
+    statusRevisionRejected,
+    statusStopped,
+    statusDisputed,
+  ];
+
+  /// Finished work, paid or awaiting payment.
+  static const List<String> doneStates = [
+    statusCompleted,
+    statusPaymentPending,
+    statusPaid,
+  ];
+
   // Urgency
   static const String urgencyNormal = 'normal';
   static const String urgencyUrgent = 'urgente';

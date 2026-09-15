@@ -39,6 +39,14 @@ class QuotationModel extends Equatable {
   final String id;
   final String servicioId;
   final String tecnicoId;
+  final String clienteId;
+
+  /// 'inicial' before work starts, 'revision' for a change mid-job.
+  final String tipo;
+  final int version;
+
+  /// For a revision: the total approved before it.
+  final double? montoAnterior;
   final List<QuotationItem> items;
   final double subtotal;
   final double impuestos;
@@ -53,6 +61,10 @@ class QuotationModel extends Equatable {
     required this.id,
     required this.servicioId,
     required this.tecnicoId,
+    this.clienteId = '',
+    this.tipo = 'inicial',
+    this.version = 1,
+    this.montoAnterior,
     required this.items,
     required this.subtotal,
     required this.impuestos,
@@ -70,6 +82,10 @@ class QuotationModel extends Equatable {
       id: doc.id,
       servicioId: data['servicioId'] ?? '',
       tecnicoId: data['tecnicoId'] ?? '',
+      clienteId: data['clienteId'] ?? '',
+      tipo: data['tipo'] ?? 'inicial',
+      version: (data['version'] as num?)?.toInt() ?? 1,
+      montoAnterior: (data['montoAnterior'] as num?)?.toDouble(),
       items: (data['items'] as List?)
               ?.map((e) => QuotationItem.fromMap(Map<String, dynamic>.from(e)))
               .toList() ??
@@ -103,6 +119,9 @@ class QuotationModel extends Equatable {
           'fechaRespuesta': Timestamp.fromDate(fechaRespuesta!),
       };
 
+  bool get isRevision => tipo == 'revision';
+  bool get isPending => estado == 'pendiente';
+
   @override
-  List<Object?> get props => [id, servicioId, tecnicoId, total, estado];
+  List<Object?> get props => [id, servicioId, tecnicoId, tipo, version, total, estado];
 }

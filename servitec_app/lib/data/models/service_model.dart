@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'work_stop.dart';
 import 'package:equatable/equatable.dart';
 
 class ServiceModel extends Equatable {
@@ -52,6 +53,12 @@ class ServiceModel extends Equatable {
   final double? montoTecnico;
   final String? estadoPago;
 
+  // Quotation and work flow — written only by Cloud Functions.
+  final String? cotizacionPendienteId;
+  final String? cotizacionAprobadaId;
+  final WorkStop? detencion;
+  final String? resolucionNota;
+
   const ServiceModel({
     required this.id,
     required this.clienteId,
@@ -81,6 +88,10 @@ class ServiceModel extends Equatable {
     this.comisionPlataforma,
     this.montoTecnico,
     this.estadoPago,
+    this.cotizacionPendienteId,
+    this.cotizacionAprobadaId,
+    this.detencion,
+    this.resolucionNota,
   });
 
   bool get isPending => estado == 'pendiente';
@@ -122,6 +133,10 @@ class ServiceModel extends Equatable {
       comisionPlataforma: (data['comisionPlataforma'] as num?)?.toDouble(),
       montoTecnico: (data['montoTecnico'] as num?)?.toDouble(),
       estadoPago: data['estadoPago'],
+      cotizacionPendienteId: data['cotizacionPendienteId'] as String?,
+      cotizacionAprobadaId: data['cotizacionAprobadaId'] as String?,
+      detencion: WorkStop.fromMap(data['detencion']),
+      resolucionNota: (data['resolucion'] as Map?)?['nota'] as String?,
     );
   }
 

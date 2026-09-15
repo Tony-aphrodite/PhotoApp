@@ -13,16 +13,23 @@ class PhoneVisibility {
   /// Returns the visibility level for a given service status.
   static PhoneVisibilityLevel resolve(String estado) {
     switch (estado) {
+      // Revealed once work has started — the same states firestore.rules
+      // open the private contact document in.
       case AppConstants.statusInProgress:
+      case AppConstants.statusRevisionSent:
+      case AppConstants.statusRevisionRejected:
+      case AppConstants.statusStopped:
+      case AppConstants.statusDisputed:
       case AppConstants.statusCompleted:
       case AppConstants.statusPaymentPending:
       case AppConstants.statusPaid:
         return PhoneVisibilityLevel.revealed;
-      // Quotation flow states (defined as raw strings in quotation screens —
-      // not in AppConstants yet). Phone is masked once the client has at least
-      // received a quotation, signalling commitment to the platform.
-      case 'cotizacion_enviada':
-      case 'en_reparacion':
+      // Masked while quoting: the client has engaged with a quotation, but
+      // the técnico is not on site yet.
+      case AppConstants.statusQuoteSent:
+      case AppConstants.statusQuoteRejected:
+      case AppConstants.statusQuoteApproved:
+      case 'en_reparacion': // legacy
         return PhoneVisibilityLevel.masked;
       default:
         return PhoneVisibilityLevel.hidden;

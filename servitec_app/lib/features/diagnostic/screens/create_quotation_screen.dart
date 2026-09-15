@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/quotation_model.dart';
+import '../../../data/repositories/service_flow_repository.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
@@ -17,7 +17,15 @@ import '../../auth/bloc/auth_state.dart';
 class CreateQuotationScreen extends StatefulWidget {
   final String serviceId;
 
-  const CreateQuotationScreen({super.key, required this.serviceId});
+  /// A revision mid-job rather than the initial quote. The server decides
+  /// which kind it is from the service's state; this only changes the copy.
+  final bool isRevision;
+
+  const CreateQuotationScreen({
+    super.key,
+    required this.serviceId,
+    this.isRevision = false,
+  });
 
   @override
   State<CreateQuotationScreen> createState() => _CreateQuotationScreenState();
@@ -29,6 +37,22 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   final List<File> _diagnosticPhotos = [];
   bool _submitting = false;
   final _picker = ImagePicker();
+
+  /// For a revision: the total the cliente approved before, shown for context.
+  double? _approvedBefore;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.isRevision) {
+      context
+          .read<ServiceRepository>()
+          .getService(widget.serviceId)
+          .then((s) {
+        if (mounted) setState(() => _approvedBefore = s.costoFinal);
+      }).catchError((_) {});
+    }
+  }
 
   double get _subtotal =>
       _items.fold(0, (sum, item) => sum + item.subtotal);
@@ -61,7 +85,13 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
   Future<void> _submit() async {
     if (_items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Agrega al menos un item')),
+        const SnackBar(content: Text('Agrega al menos un concepto')),
+      );
+      return;
+    }
+    if (_items.any((e) => e.descController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Todos los conceptos necesitan descripción')),
       );
       return;
     }
@@ -70,6 +100,8 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
     if (authState is! AuthAuthenticated) return;
 
     setState(() => _submitting = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final flow = context.read<ServiceFlowRepository>();
 
     try {
       // Upload diagnostic photos
@@ -85,10 +117,10 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         photoUrls = images.map((i) => i.url).toList();
       }
 
-      final quotation = QuotationModel(
-        id: '',
+      // The server re-prices every line and posts the chat message; totals
+      // shown here are a preview of the same arithmetic.
+      await flow.submitQuotation(
         servicioId: widget.serviceId,
-        tecnicoId: authState.user.uid,
         items: _items
             .map((e) => QuotationItem(
                   descripcion: e.descController.text.trim(),
@@ -99,43 +131,9 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   subtotal: e.subtotal,
                 ))
             .toList(),
-        subtotal: _subtotal,
-        impuestos: _tax,
-        total: _total,
-        estado: 'pendiente',
-        notasTecnico: _notesController.text.trim().isNotEmpty
-            ? _notesController.text.trim()
-            : null,
-        fotosDiagnostico: photoUrls,
-        fechaCreacion: DateTime.now(),
+        notas: _notesController.text.trim(),
+        fotos: photoUrls,
       );
-
-      await FirebaseFirestore.instance
-          .collection('cotizaciones')
-          .add(quotation.toFirestore());
-
-      // Update service state
-      await FirebaseFirestore.instance
-          .collection('servicios')
-          .doc(widget.serviceId)
-          .update({
-        'estado': 'cotizacion_enviada',
-        'updatedAt': Timestamp.now(),
-      });
-
-      // Narrate the event in the service chat thread.
-      if (mounted) {
-        await context.read<ServiceRepository>().postSystemMessage(
-              widget.serviceId,
-              'Cotización enviada — Total: ${CurrencyFormatter.format(_total)} (IVA incluido)',
-              metadata: {
-                'event': 'quotation_sent',
-                'total': _total,
-                'subtotal': _subtotal,
-                'iva': _tax,
-              },
-            );
-      }
 
       // Analytics — funnel step from técnico side.
       await AnalyticsService.logQuotationSent(
@@ -143,21 +141,22 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         total: _total,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cotizacion enviada al cliente'),
-            backgroundColor: AppTheme.successColor,
-          ),
-        );
-        context.pop();
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(widget.isRevision
+              ? 'Cotización revisada enviada. Espera la aprobación del cliente.'
+              : 'Cotización enviada al cliente.'),
+          backgroundColor: AppTheme.successColor,
+        ),
+      );
+      if (mounted) context.pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(e is FlowException ? e.message : 'Error: $e'),
+          backgroundColor: AppTheme.errorColor,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -180,7 +179,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          'Crear Cotizacion',
+          widget.isRevision ? 'Cotización revisada' : 'Crear cotización',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.w700,
@@ -194,6 +193,30 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (widget.isRevision) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+                  border: Border.all(
+                      color: AppTheme.warningColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  'Cotiza el trabajo completo con el problema adicional, no solo '
+                  'la diferencia. El cliente verá el monto aprobado'
+                  '${_approvedBefore != null ? ' (${CurrencyFormatter.format(_approvedBefore!)})' : ''} '
+                  'junto al nuevo total y deberá aprobarlo antes de que continúes '
+                  'con el trabajo adicional.',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    height: 1.5,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
             // Section 1 - Items
             _SectionHeader(
               number: '1',

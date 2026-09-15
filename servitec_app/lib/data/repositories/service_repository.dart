@@ -150,9 +150,14 @@ class ServiceRepository {
   }
 
   // Get all services (admin — paginated 20 per page)
-  Stream<List<ServiceModel>> getAllServices({String? statusFilter}) {
+  /// [statusIn] filters to any of several states — the flow has more states
+  /// than the dashboard has tabs (see AppConstants.preWorkStates et al.).
+  Stream<List<ServiceModel>> getAllServices(
+      {String? statusFilter, List<String>? statusIn}) {
     Query query = _servicesRef.orderBy('createdAt', descending: true);
-    if (statusFilter != null) {
+    if (statusIn != null) {
+      query = query.where('estado', whereIn: statusIn);
+    } else if (statusFilter != null) {
       query = query.where('estado', isEqualTo: statusFilter);
     }
     return query.snapshots().map((snapshot) =>

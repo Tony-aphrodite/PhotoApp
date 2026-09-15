@@ -16,6 +16,7 @@ import 'data/repositories/factura_repository.dart';
 import 'data/repositories/payment_repository.dart';
 import 'data/repositories/review_repository.dart';
 import 'data/repositories/account_admin_repository.dart';
+import 'data/repositories/service_flow_repository.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'features/auth/bloc/auth_bloc.dart';
 import 'features/auth/bloc/auth_event.dart';
@@ -82,6 +83,7 @@ class ServiTecApp extends StatelessWidget {
     final reviewRepository = ReviewRepository();
     final categoryRepository = CategoryRepository();
     final accountAdminRepository = AccountAdminRepository();
+    final serviceFlowRepository = ServiceFlowRepository();
     // Live lookup table every category picker reads. Starts from the
     // hardcoded defaults so the first frame is never empty.
     CategoryCatalog.start(categoryRepository);
@@ -106,6 +108,7 @@ class ServiTecApp extends StatelessWidget {
         RepositoryProvider.value(value: reviewRepository),
         RepositoryProvider.value(value: categoryRepository),
         RepositoryProvider.value(value: accountAdminRepository),
+        RepositoryProvider.value(value: serviceFlowRepository),
       ],
       child: BlocProvider.value(
         value: authBloc,

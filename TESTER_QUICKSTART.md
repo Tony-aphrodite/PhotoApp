@@ -125,29 +125,42 @@ Open the service chat as either party. Try sending each of these:
 
 ---
 
-## Test 7 — Quotation flow
+## Test 7 — Quotation (required before any work)
 
-1. Técnico opens the assigned service → sends a cotización with 2 items totalling ~$500 MXN.
-2. **Expected**:
-   - Cliente gets a push: *"ServiTec — Cotización enviada — Total: $X"*.
-   - System pill in chat.
-3. Cliente reviews the cotización → **"Aprobar"**.
-4. **Expected**:
-   - Técnico gets a push: *"ServiTec — Cotización aprobada..."*.
-   - Service state advances to `en_reparacion`.
-
-**Now check the phone reveal** — Cliente card (visible to técnico) still shows masked phone (`+•• •• •••• ••78`) because state is not yet `en_progreso`.
+1. Técnico opens the assigned service → **Enviar cotización** → 2 items (e.g. mano de obra $800 + material $235) → send.
+2. **Expected**: state `Cotización enviada`; cliente gets push *"Cotización enviada — Total: $1,200.60 (IVA incluido)…"*; técnico sees *"Esperando la respuesta del cliente"* and **no "Iniciar trabajo" button**.
+3. Cliente opens the service → **Revisar cotización** → **Rechazar** → confirm.
+4. **Expected**: state `Cotización rechazada`; técnico can **Enviar nueva cotización** (version 2). The service's *Cotizaciones* card lists v1 crossed out.
+5. Técnico sends v2 → cliente **Aprobar** → confirm.
+6. **Expected**: state `Cotización aprobada`; técnico gets push; técnico now sees **Iniciar trabajo ($X)**. Phone on the cliente card is still masked.
 
 ---
 
-## Test 8 — Service execution + phone reveal
+## Test 8 — Work, revised quotation, stopping
 
-1. Técnico taps **"Iniciar Servicio"**.
-2. Service state → `en_progreso`.
-3. **Expected**:
-   - Cliente gets push.
-   - **Now on service detail, técnico sees the full phone number** (not masked). Confirms the private subdoc rule allows the read at this state.
-4. Técnico taps **"Marcar como Completado"** → state → `completado`.
+**8a — Happy path**
+1. Técnico **Iniciar trabajo** → state `En Progreso`; técnico now sees the full cliente phone.
+2. Técnico **Marcar como terminado** → the dialog shows the approved amount → state `Completado`; cliente sees **Pagar $X** for exactly that amount.
+
+**8b — Revised quotation approved** (new service, repeat Test 7 first)
+1. While `En Progreso`, técnico **Encontré un problema adicional** → send a higher total.
+2. **Expected**: state `Revisión enviada`; **Marcar como terminado is gone** until the cliente answers; cliente sees the old and new totals side by side.
+3. Cliente **Aprobar** → back to `En Progreso` with the new total; paying later charges the new total.
+
+**8c — Revision rejected, técnico continues the original scope**
+1. As 8b, but cliente **Rechazar** → state `Revisión rechazada`.
+2. Técnico sees three options → **Continuar con el trabajo original** → `En Progreso` → terminate → cliente pays the **original** amount.
+
+**8d — Revision rejected, técnico stops; cliente accepts**
+1. As 8c step 1, then técnico **Detener trabajo**: pick a reason, write an explanation, add ≥1 photo, propose an amount ≤ the approved one.
+2. **Expected**: the app refuses without a photo or with an amount above the approved one. After sending: state `Trabajo detenido`; cliente sees reason, photos and amount.
+3. Cliente **Aceptar $X** → state `Completado` → pays $X. (Proposing $0 closes the service with no charge.)
+4. Admin → Alertas shows a *work_stopped* entry.
+
+**8e — Stop disputed, admin resolves**
+1. As 8d, but cliente **No estoy de acuerdo** with a comment → state `En revisión ServiTec`; admins get a push.
+2. Admin opens the service (Dashboard → **Detenidos** filter) → **Resolver disputa** → amount + note.
+3. **Expected**: state `Completado` with that amount (or closed without charge below $10); both parties see the note in chat.
 
 ---
 

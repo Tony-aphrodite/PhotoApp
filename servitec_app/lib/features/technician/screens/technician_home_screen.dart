@@ -428,16 +428,16 @@ class _TechnicianTabBody extends StatelessWidget {
 
             final pendingServices = pendingSnapshot.data ?? [];
             final myServices = mySnapshot.data ?? [];
+            // Tabs follow the stage of the job, so quoting sits with
+            // "Asignados" and a revision or stop with "En Progreso".
             final assigned = myServices
-                .where((s) => s.estado == AppConstants.statusAssigned)
+                .where((s) => AppConstants.preWorkStates.contains(s.estado))
                 .toList();
             final inProgress = myServices
-                .where((s) => s.estado == AppConstants.statusInProgress)
+                .where((s) => AppConstants.workStates.contains(s.estado))
                 .toList();
             final completed = myServices
-                .where((s) =>
-                    s.estado == AppConstants.statusCompleted ||
-                    s.estado == AppConstants.statusPaid)
+                .where((s) => AppConstants.doneStates.contains(s.estado))
                 .toList();
 
             return TabBarView(

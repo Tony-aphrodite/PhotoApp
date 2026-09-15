@@ -3,13 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/quotation_model.dart';
-import '../../../data/repositories/service_repository.dart';
+import '../../../data/repositories/service_flow_repository.dart';
+import '../../auth/bloc/auth_bloc.dart';
+import '../../auth/bloc/auth_state.dart';
 
 class ReviewQuotationScreen extends StatefulWidget {
   final String quotationId;
@@ -30,67 +31,82 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
     super.dispose();
   }
 
-  Future<void> _respond(BuildContext context, String response) async {
-    final firestore = FirebaseFirestore.instance;
+  bool _responding = false;
 
-    final doc =
-        await firestore.collection('cotizaciones').doc(widget.quotationId).get();
-    final servicioId = doc.data()?['servicioId'];
+  Future<void> _respond(
+      BuildContext context, QuotationModel quotation, bool aprobar) async {
+    // Approving commits the cliente to a charge, so it is never one tap.
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        ),
+        title: Text(
+          aprobar ? 'Aprobar cotización' : 'Rechazar cotización',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          aprobar
+              ? quotation.isRevision
+                  ? 'El nuevo total del servicio será ${CurrencyFormatter.format(quotation.total)}. '
+                      'El técnico continuará con el trabajo adicional y este será el monto que pagarás al terminar.'
+                  : 'Aceptas pagar ${CurrencyFormatter.format(quotation.total)} al terminar el servicio. '
+                      'El técnico podrá iniciar el trabajo.'
+              : quotation.isRevision
+                  ? 'El monto aprobado se mantiene en ${CurrencyFormatter.format(quotation.montoAnterior ?? 0)}. '
+                      'El técnico decidirá si puede terminar solo el trabajo original de forma segura.'
+                  : 'El técnico podrá enviarte una nueva cotización.',
+          style: GoogleFonts.plusJakartaSans(
+              color: AppTheme.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Volver'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor:
+                  aprobar ? AppTheme.successColor : AppTheme.errorColor,
+            ),
+            child: Text(aprobar ? 'Aprobar' : 'Rechazar',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
 
-    await firestore.collection('cotizaciones').doc(widget.quotationId).update({
-      'estado': response,
-      'fechaRespuesta': Timestamp.now(),
-    });
-
-    if (servicioId != null) {
-      final newStatus =
-          response == 'aprobada' ? 'en_reparacion' : 'cotizacion_rechazada';
-      final total = (doc.data()?['total'] as num?)?.toDouble();
-      await firestore.collection('servicios').doc(servicioId).update({
-        'estado': newStatus,
-        'updatedAt': Timestamp.now(),
-        if (response == 'aprobada' && total != null) 'costoFinal': total,
-      });
-
-      // Narrate the quotation decision in the service chat thread.
-      if (context.mounted) {
-        final text = response == 'aprobada'
-            ? 'Cotización aprobada${total != null ? ' — Total: ${CurrencyFormatter.format(total)}' : ''}. El técnico puede proceder con la reparación.'
-            : 'Cotización rechazada por el cliente.';
-        await context.read<ServiceRepository>().postSystemMessage(
-              servicioId,
-              text,
-              metadata: {
-                'event': response == 'aprobada'
-                    ? 'quotation_approved'
-                    : 'quotation_rejected',
-                if (total != null) 'total': total,
-              },
-            );
-      }
-
-      // Analytics — funnel step from cliente side.
-      if (response == 'aprobada') {
+    setState(() => _responding = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<ServiceFlowRepository>().respondQuotation(
+            cotizacionId: quotation.id,
+            aprobar: aprobar,
+          );
+      if (aprobar) {
         await AnalyticsService.logQuotationApproved(
-          servicioId: servicioId,
-          total: total ?? 0,
+          servicioId: quotation.servicioId,
+          total: quotation.total,
         );
       } else {
-        await AnalyticsService.logQuotationRejected(servicioId: servicioId);
+        await AnalyticsService.logQuotationRejected(
+            servicioId: quotation.servicioId);
       }
-    }
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(response == 'aprobada'
-              ? 'Cotizacion aprobada. El tecnico procedera con la reparacion.'
-              : 'Cotizacion rechazada.'),
-          backgroundColor:
-              response == 'aprobada' ? AppTheme.successColor : AppTheme.errorColor,
-        ),
-      );
-      context.pop();
+      messenger.showSnackBar(SnackBar(
+        content: Text(aprobar ? 'Cotización aprobada.' : 'Cotización rechazada.'),
+        backgroundColor: aprobar ? AppTheme.successColor : AppTheme.textSecondary,
+      ));
+      if (context.mounted) context.pop();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e is FlowException ? e.message : 'Error: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } finally {
+      if (mounted) setState(() => _responding = false);
     }
   }
 
@@ -102,7 +118,7 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         title: Text(
-          'Cotizacion',
+          'Cotización',
           style: GoogleFonts.plusJakartaSans(
             fontSize: 20,
             fontWeight: FontWeight.w700,
@@ -124,14 +140,53 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
           }
 
           final quotation = QuotationModel.fromFirestore(snapshot.data!);
+          final authState = context.read<AuthBloc>().state;
+          final isCliente = authState is AuthAuthenticated &&
+              authState.user.uid == quotation.clienteId;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (quotation.isRevision) ...[
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor.withValues(alpha: 0.08),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusLarge),
+                      border: Border.all(
+                          color: AppTheme.warningColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cotización revisada (versión ${quotation.version})',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Durante el trabajo el técnico encontró algo adicional. '
+                          'Monto aprobado antes: ${CurrencyFormatter.format(quotation.montoAnterior ?? 0)} · '
+                          'Nuevo total: ${CurrencyFormatter.format(quotation.total)}.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            height: 1.5,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 // Status banner
-                if (quotation.estado != 'pendiente')
+                if (!quotation.isPending)
                   Container(
                     padding: const EdgeInsets.symmetric(
                         vertical: 14, horizontal: 20),
@@ -514,8 +569,8 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
 
                 const SizedBox(height: 24),
 
-                // Action buttons
-                if (quotation.estado == 'pendiente') ...[
+                // Action buttons — only the cliente answers.
+                if (quotation.isPending && isCliente) ...[
                   // Approve button
                   Container(
                     width: double.infinity,
@@ -539,7 +594,9 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        onTap: () => _respond(context, 'aprobada'),
+                        onTap: _responding
+                            ? null
+                            : () => _respond(context, quotation, true),
                         borderRadius:
                             BorderRadius.circular(AppTheme.radiusMedium),
                         child: Padding(
@@ -575,7 +632,9 @@ class _ReviewQuotationScreenState extends State<ReviewQuotationScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () => _respond(context, 'rechazada'),
+                      onPressed: _responding
+                          ? null
+                          : () => _respond(context, quotation, false),
                       icon: const Icon(Icons.cancel_outlined,
                           color: AppTheme.errorColor),
                       label: Text(

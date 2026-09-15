@@ -16,6 +16,13 @@ class StatusBadge extends StatelessWidget {
     'cancelado': 'Cancelado',
     'pago_pendiente': 'Pago Pendiente',
     'pagado': 'Pagado',
+    'cotizacion_enviada': 'Cotización enviada',
+    'cotizacion_rechazada': 'Cotización rechazada',
+    'cotizacion_aprobada': 'Cotización aprobada',
+    'revision_enviada': 'Revisión enviada',
+    'revision_rechazada': 'Revisión rechazada',
+    'detenido': 'Trabajo detenido',
+    'en_disputa': 'En revisión ServiTec',
   };
 
   @override

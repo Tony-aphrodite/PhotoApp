@@ -43,6 +43,13 @@ class AppTheme {
     'cancelado': Color(0xFFFF1744),
     'pago_pendiente': Color(0xFFFF6D00),
     'pagado': Color(0xFF00C853),
+    'cotizacion_enviada': Color(0xFF00B8D4),
+    'cotizacion_rechazada': Color(0xFFFF6D00),
+    'cotizacion_aprobada': Color(0xFF2979FF),
+    'revision_enviada': Color(0xFF00B8D4),
+    'revision_rechazada': Color(0xFFFF6D00),
+    'detenido': Color(0xFFFF1744),
+    'en_disputa': Color(0xFFD50000),
   };
 
   // Premium Gradients

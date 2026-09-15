@@ -10,6 +10,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/phone_visibility.dart';
+import '../../../core/utils/service_state_machine.dart';
 import '../../../core/widgets/status_badge.dart';
 import '../../../data/models/factura_model.dart';
 import '../../../data/models/service_private_contact.dart';
@@ -18,6 +19,7 @@ import '../../../data/repositories/factura_repository.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
+import '../widgets/service_flow_panel.dart';
 import '../../../core/utils/category_catalog.dart';
 
 class ServiceDetailScreen extends StatefulWidget {
@@ -494,60 +496,16 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
 
                       const SizedBox(height: 24),
 
-                      // Action Buttons
-                      if (isTechnician && service.isAssigned)
-                        _GradientActionButton(
-                          onPressed: () {
-                            context
-                                .read<ServiceRepository>()
-                                .updateServiceStatus(
-                                  service.id,
-                                  AppConstants.statusInProgress,
-                                );
-                          },
-                          icon: Icons.play_arrow_rounded,
-                          label: 'Iniciar Servicio',
-                          gradientColors: const [
-                            Color(0xFF0D7377),
-                            Color(0xFF14BDAC),
-                          ],
-                        ),
-
-                      if (isTechnician && service.isInProgress) ...[
-                        _GradientActionButton(
-                          onPressed: () {
-                            context
-                                .read<ServiceRepository>()
-                                .updateServiceStatus(
-                                  service.id,
-                                  AppConstants.statusCompleted,
-                                );
-                          },
-                          icon: Icons.check_circle_outline_rounded,
-                          label: 'Marcar como Completado',
-                          gradientColors: const [
-                            Color(0xFF00C853),
-                            Color(0xFF69F0AE),
-                          ],
-                        ),
-                      ],
-
-                      // Payment button
-                      if (isClient &&
-                          (service.isCompleted ||
-                              service.estado ==
-                                  AppConstants.statusPaymentPending))
-                        _GradientActionButton(
-                          onPressed: () =>
-                              context.push('/payment/${service.id}'),
-                          icon: Icons.payment_rounded,
-                          label:
-                              'Pagar ${CurrencyFormatter.compact(service.costoFinal ?? service.estimacionCosto ?? 0)}',
-                          gradientColors: const [
-                            Color(0xFF00C853),
-                            Color(0xFF69F0AE),
-                          ],
-                        ),
+                      // Quotation and work flow: history, a stopped job's
+                      // evidence, and this viewer's next step (quote, approve,
+                      // start, finish, stop, pay, resolve).
+                      ServiceFlowPanel(
+                        service: service,
+                        viewerUid: currentUser.uid,
+                        isClient: isClient,
+                        isTechnician: isTechnician,
+                        isAdmin: isAdmin,
+                      ),
 
                       // Review button
                       if (isClient &&
@@ -607,8 +565,10 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                           ],
                         ),
 
+                      // Cancelling is possible until work starts; after that
+                      // the flow ends through completion or a stop.
                       if ((isClient || isAdmin) &&
-                          (service.isPending || service.isAssigned))
+                          ServiceStateMachine.canCancel(service.estado))
                         Padding(
                           padding: const EdgeInsets.only(top: 12),
                           child: SizedBox(

@@ -35,6 +35,7 @@ import '../features/validation/screens/stripe_connect_screen.dart';
 import '../features/appointment/screens/book_appointment_screen.dart';
 import '../features/appointment/screens/technician_agenda_screen.dart';
 import '../features/service/screens/service_detail_screen.dart';
+import '../features/service/screens/stop_work_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 
@@ -253,6 +254,13 @@ class AppRouter {
       GoRoute(
         path: '/quotation/create/:serviceId',
         builder: (context, state) => CreateQuotationScreen(
+          serviceId: state.pathParameters['serviceId']!,
+          isRevision: state.uri.queryParameters['revision'] == '1',
+        ),
+      ),
+      GoRoute(
+        path: '/service/:serviceId/stop',
+        builder: (context, state) => StopWorkScreen(
           serviceId: state.pathParameters['serviceId']!,
         ),
       ),
