@@ -17,10 +17,14 @@ service cloud.firestore {
       return request.auth.token.email_verified == true;
     }
 
-    // Campos de un servicio que reflejan dinero cobrado o por cobrar.
+    // Campos de un servicio que solo escribe Cloud Functions: el dinero
+    // cobrado o por cobrar, y el estado del flujo de cotización y trabajo
+    // (functions/src/service-flow.ts), que decide ese dinero.
     function serverMoneyFields() {
       return ['costoFinal', 'montoPagado', 'comisionPlataforma', 'montoTecnico',
-              'estadoPago', 'stripePaymentIntentId', 'paidAt'];
+              'estadoPago', 'stripePaymentIntentId', 'paidAt',
+              'cotizacionPendienteId', 'cotizacionAprobadaId', 'detencion',
+              'resolucion', 'iniciadoAt', 'completadoAt'];
     }
 
     function getUserRole() {
@@ -141,30 +145,31 @@ service cloud.firestore {
 
       // Actualización:
       // - Admin puede todo
-      // - Cliente puede actualizar sus servicios pendientes (incluyendo seleccionar técnico)
-      // - Técnico solo puede actualizar estado de servicios asignados
+      // - Cliente: edita su solicitud mientras está pendiente, la cancela antes
+      //   de que empiece el trabajo, o adjunta fotos
+      // - Técnico: nada directo. Cotizar, iniciar, terminar y detener pasan por
+      //   Cloud Functions (service-flow.ts), porque cada paso fija el monto
+      //   que se cobrará. Antes el técnico podía escribir cualquier estado,
+      //   incluido 'completado' sin cotización aprobada.
       allow update: if isAuthenticated() && (
         isAdmin() ||
-        // Cliente: free rein while the request is still pendiente. Two
-        // narrow exceptions once a técnico has been assigned:
-        //  - cancelling (the button is offered for pendiente AND asignado)
-        //  - attaching the photo URLs, which the app writes moments after
-        //    create — by which time onServiceCreated may already have flipped
-        //    the service to `asignado`, so a pendiente-only rule loses them.
-        //    `updatedAt` is in the set because ServiceRepository.updateService
-        //    stamps it on every call.
         (isCliente() &&
          resource.data.clienteId == request.auth.uid &&
          !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverMoneyFields().concat(['estimacionCosto'])) &&
-         (resource.data.estado == 'pendiente' ||
-          (request.resource.data.estado == 'cancelado' &&
+         // While pendiente the cliente may edit the request, but not jump it
+         // to another state.
+         ((resource.data.estado == 'pendiente' &&
+           request.resource.data.estado in ['pendiente', 'cancelado']) ||
+          // Cancelling is allowed until work starts.
+          (resource.data.estado in ['asignado', 'cotizacion_enviada',
+                                    'cotizacion_rechazada', 'cotizacion_aprobada'] &&
+           request.resource.data.estado == 'cancelado' &&
            request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['estado', 'updatedAt'])) ||
+          // Attaching photo URLs, written moments after create — by which time
+          // onServiceCreated may already have assigned the service.
           request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['fotos', 'fotosThumbs', 'updatedAt']))) ||
-        (isTecnico() &&
-         resource.data.get('tecnicoId', null) == request.auth.uid &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']))
+            .hasOnly(['fotos', 'fotosThumbs', 'updatedAt'])))
       );
 
       allow delete: if isAdmin();
@@ -182,7 +187,8 @@ service cloud.firestore {
           (isTecnico() &&
            get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid &&
            get(/databases/$(database)/documents/servicios/$(servicioId)).data.estado in
-             ['en_progreso', 'completado', 'pago_pendiente', 'pagado'])
+             ['en_progreso', 'revision_enviada', 'revision_rechazada', 'detenido',
+              'en_disputa', 'completado', 'pago_pendiente', 'pagado'])
         );
 
         // Only the cliente owner (or admin) can create/update the private
@@ -295,26 +301,12 @@ service cloud.firestore {
         resource.data.tecnicoId == request.auth.uid
       );
 
-      // Creación: solo técnicos asignados al servicio
-      allow create: if isAuthenticated() && isVerified() &&
-                      isTecnico() &&
-                      request.resource.data.tecnicoId == request.auth.uid &&
-                      request.resource.data.estado == 'pendiente';
-
-      // Actualización:
-      // - Técnico: puede editar mientras estado sea 'pendiente'
-      // - Cliente: solo puede cambiar estado a 'aprobada' o 'rechazada'
-      // - Admin: puede todo
-      allow update: if isAuthenticated() && (
-        isAdmin() ||
-        (isTecnico() &&
-         resource.data.tecnicoId == request.auth.uid &&
-         resource.data.estado == 'pendiente') ||
-        (isCliente() &&
-         resource.data.clienteId == request.auth.uid &&
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['estado', 'updatedAt']) &&
-         request.resource.data.estado in ['aprobada', 'rechazada'])
-      );
+      // Escritura: solo Cloud Functions (submitQuotation / respondQuotation).
+      // El servidor calcula los totales a partir de los conceptos y copia el
+      // total aprobado al servicio. Antes el técnico podía editar una
+      // cotización pendiente — incluido el total — mientras el cliente la
+      // revisaba, y el cliente aprobaba escribiendo el estado él mismo.
+      allow create, update: if false;
 
       allow delete: if isAdmin();
     }

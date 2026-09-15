@@ -33,27 +33,14 @@ const PAYABLE_STATES = ['completado', 'pago_pendiente'];
  * What the service costs, decided here and never taken from the request.
  *
  * This endpoint used to charge whatever `amount` the app sent, with no sign-in
- * check at all — anyone who knew a service id could have it marked paid for
- * one peso, with a CFDI to match. The price now comes from, in order:
- *   1. the approved cotización's total — written by the técnico, and the
- *      figure the cliente agreed to;
- *   2. `costoFinal` on the service — firestore.rules keep clients from
- *      writing it;
- *   3. `estimacionCosto` — the tariff-based estimate shown when the request
- *      was created.
+ * check at all. The price is now `costoFinal`, which only Cloud Functions
+ * write (firestore.rules forbid clients): the approved cotización total, the
+ * approved revision, or the amount accepted/resolved after work was stopped —
+ * see service-flow.ts. Services created before that flow fall back to the
+ * tariff-based `estimacionCosto`.
  */
-async function serviceAmountCentavos(
-  servicioId: string,
-  service: FirebaseFirestore.DocumentData,
-): Promise<number> {
-  const approved = await db
-    .collection('cotizaciones')
-    .where('servicioId', '==', servicioId)
-    .where('estado', '==', 'aprobada')
-    .limit(1)
-    .get();
+function serviceAmountCentavos(service: FirebaseFirestore.DocumentData): number {
   const mxn =
-    (approved.empty ? undefined : (approved.docs[0].get('total') as number)) ??
     (service.costoFinal as number | undefined) ??
     (service.estimacionCosto as number | undefined) ??
     0;
@@ -114,7 +101,7 @@ export const createPaymentIntent = onRequest(
         return;
       }
 
-      const amount = await serviceAmountCentavos(servicioId, service);
+      const amount = serviceAmountCentavos(service);
       // Stripe's MXN minimum is $10.00.
       if (amount < 1000) {
         res.status(400).json({ error: 'El servicio no tiene un monto válido para cobrar.', code: 'no_amount' });

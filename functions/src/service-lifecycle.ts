@@ -27,6 +27,7 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db, admin } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
+import { ACTIVE_WORK_STATES } from './lib/service-flow-rules';
 
 interface ScoredTechnician {
   uid: string;
@@ -166,7 +167,7 @@ export const onServiceCreated = onDocumentCreated(
         const active = await db
           .collection('servicios')
           .where('tecnicoId', '==', doc.id)
-          .where('estado', 'in', ['asignado', 'en_progreso'])
+          .where('estado', 'in', ACTIVE_WORK_STATES)
           .get();
         workloads.set(doc.id, active.size);
       }),
