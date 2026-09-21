@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../survey/survey_widgets.dart';
 import '../../../data/repositories/storage_repository.dart';
 import '../../../data/repositories/user_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
@@ -403,6 +404,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+
+                  // User-test feedback; hidden until an admin sets the link.
+                  SurveyButton(user: user),
 
                   const SizedBox(height: 32),
 
