@@ -24,7 +24,12 @@ service cloud.firestore {
       return ['costoFinal', 'montoPagado', 'comisionPlataforma', 'montoTecnico',
               'estadoPago', 'stripePaymentIntentId', 'paidAt',
               'cotizacionPendienteId', 'cotizacionAprobadaId', 'detencion',
-              'resolucion', 'iniciadoAt', 'completadoAt'];
+              'resolucion', 'iniciadoAt', 'completadoAt',
+              // Flujo de visita de diagnóstico (functions/src/visit-flow.ts):
+              // el tipo de flujo y el precio de la visita salen de la
+              // configuración de la categoría, no del cliente.
+              'flujo', 'visita', 'autoCierre', 'revisionAt', 'revisionTarea',
+              'cierre', 'montoSaldo'];
     }
 
     function getUserRole() {
@@ -96,7 +101,10 @@ service cloud.firestore {
             'serviciosCompletados',
             'facturapi',
             'graciaExpiraAt',
-            'stripeConnectAccountId'
+            'stripeConnectAccountId',
+            // Contadores de incidencias del técnico (no se presentó,
+            // canceló, detuvo un trabajo); solo los escribe el servidor.
+            'incidencias'
           ]);
 
       allow delete: if isAdmin();
@@ -160,8 +168,11 @@ service cloud.firestore {
          // to another state.
          ((resource.data.estado == 'pendiente' &&
            request.resource.data.estado in ['pendiente', 'cancelado']) ||
-          // Cancelling is allowed until work starts.
-          (resource.data.estado in ['asignado', 'cotizacion_enviada',
+          // Cancelling is allowed until work starts — standard flow only. A
+          // diagnostic service may hold or have charged a visit fee, so it is
+          // cancelled through visitAction, which releases or keeps the money.
+          (resource.data.get('flujo', 'estandar') != 'diagnostico' &&
+           resource.data.estado in ['asignado', 'cotizacion_enviada',
                                     'cotizacion_rechazada', 'cotizacion_aprobada'] &&
            request.resource.data.estado == 'cancelado' &&
            request.resource.data.diff(resource.data).affectedKeys()
@@ -188,7 +199,9 @@ service cloud.firestore {
            get(/databases/$(database)/documents/servicios/$(servicioId)).data.get('tecnicoId', null) == request.auth.uid &&
            get(/databases/$(database)/documents/servicios/$(servicioId)).data.estado in
              ['en_progreso', 'revision_enviada', 'revision_rechazada', 'detenido',
-              'en_disputa', 'completado', 'pago_pendiente', 'pagado'])
+              'en_disputa', 'completado', 'pago_pendiente', 'pagado',
+              // Visita de diagnóstico: el técnico ya va en camino o está ahí.
+              'en_camino', 'diagnostico_realizado', 'reporte_no_llego'])
         );
 
         // Only the cliente owner (or admin) can create/update the private

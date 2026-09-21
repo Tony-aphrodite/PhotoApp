@@ -24,6 +24,7 @@
  */
 
 import { onRequest } from 'firebase-functions/v2/https';
+import { visitPaidOf } from './lib/visit-rules';
 import { db, admin } from './lib/admin';
 import { stripe } from './lib/stripe';
 import { facturapiForOrg } from './lib/facturapi';
@@ -67,6 +68,9 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     const tecnicoUidFromMeta = pi.metadata?.tecnicoUid;
     const clienteUidFromMeta = pi.metadata?.clienteUid;
     const platformFeeCentavos = Number(pi.metadata?.platformCommissionCentavos || 0);
+    // 'visita' = the diagnostic visit fee (charged when the técnico leaves);
+    // 'saldo' = the rest of that service; 'servicio' = a standard service.
+    const concepto = (pi.metadata?.concepto as string) || 'servicio';
     if (!servicioId) {
       res.status(200).send('missing servicioId in metadata');
       return;
@@ -81,10 +85,6 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     const service = serviceDoc.data()!;
     const tecnicoUid = (service.tecnicoId as string) || tecnicoUidFromMeta;
     const clienteUid = (service.clienteId as string) || clienteUidFromMeta;
-
-    const tecnicoDoc = await db.collection('users').doc(tecnicoUid).get();
-    const tecnico = tecnicoDoc.data()!;
-    const orgApiKey: string | undefined = tecnico?.facturapi?.organizationApiKey;
 
     // Amounts in MXN (Stripe returns centavos as integer amount).
     const totalMxn = (pi.amount as number) / 100;
@@ -103,10 +103,42 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       comisionPlataforma: platformFeeMxn,
       montoTecnico: tecnicoNetMxn,
       stripePaymentIntentId: pi.id,
+      concepto,
       estado: 'completado',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       completedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+
+    if (concepto === 'visita') {
+      // A visit fee is its own charge and, per the accountant, gets its own
+      // CFDI. When to stamp it and under which SAT key is still being
+      // confirmed, so it is queued for an admin rather than stamped now. The
+      // service state was already moved by the "Voy en camino" callable; the
+      // job is not complete yet, so no counters here.
+      const txRef = db.collection('transacciones').doc(pi.id);
+      if (!(await txRef.get()).data()?.cfdiEnCola) {
+        const batch = db.batch();
+        batch.set(db.collection('admin_flags').doc(), {
+          type: 'cfdi_diagnostico_pendiente',
+          servicioId,
+          tecnicoUid,
+          stripePaymentIntentId: pi.id,
+          monto: totalMxn,
+          estado: 'pendiente',
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        batch.update(txRef, { cfdiEnCola: true });
+        await batch.commit();
+      }
+      res.status(200).send('visit charge recorded; CFDI queued');
+      return;
+    }
+    const visitPaid = visitPaidOf(service);
+
+    // Only needed from here on (CFDI), so a visit charge skips this read.
+    const tecnicoDoc = await db.collection('users').doc(tecnicoUid).get();
+    const tecnico = tecnicoDoc.data()!;
+    const orgApiKey: string | undefined = tecnico?.facturapi?.organizationApiKey;
 
     // The técnico's completed-services counter. Clients cannot write it
     // (firestore.rules protects it, correctly — it feeds assignment scoring),
@@ -150,7 +182,9 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     // see it as completed and paid.
     await db.collection('servicios').doc(servicioId).update({
       estado: 'pagado',
-      montoPagado: totalMxn,
+      // Diagnostic flow: the service's price was paid in two charges.
+      montoPagado: totalMxn + visitPaid,
+      ...(visitPaid > 0 ? { montoSaldo: totalMxn } : {}),
       comisionPlataforma: platformFeeMxn,
       montoTecnico: tecnicoNetMxn,
       estadoPago: 'pagado',

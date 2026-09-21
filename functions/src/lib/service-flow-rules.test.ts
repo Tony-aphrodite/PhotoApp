@@ -77,6 +77,8 @@ test('stopping work requires evidence and caps the amount', () => {
   assert.throws(() => validateStop({ ...ok, descripcion: 'no' }, 1200), FlowError);
   assert.throws(() => validateStop({ ...ok, montoPropuesto: 1200.01 }, 1200), FlowError);
   assert.equal(validateStop({ ...ok, montoPropuesto: 1200 }, 1200).montoPropuesto, 1200);
+  assert.throws(() => validateStop({ ...ok, montoPropuesto: 300 }, 1200, 400), FlowError, 'below the visit fee');
+  assert.equal(validateStop({ ...ok, montoPropuesto: 400 }, 1200, 400).montoPropuesto, 400);
 });
 
 test('a closing amount below the Stripe minimum closes with nothing to pay', () => {

@@ -28,6 +28,8 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { db, admin } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 import { ACTIVE_WORK_STATES } from './lib/service-flow-rules';
+import { FLUJO, PAGO } from './lib/visit-rules';
+import { categoryFlow } from './lib/visit-store';
 
 interface ScoredTechnician {
   uid: string;
@@ -65,6 +67,7 @@ function distanceKm(
  */
 async function eligibleTechnicians(
   categoria: string,
+  requiresPayouts = false,
 ): Promise<FirebaseFirestore.QueryDocumentSnapshot[]> {
   const snap = await db
     .collection('users')
@@ -80,7 +83,10 @@ async function eligibleTechnicians(
     const { users } = await admin.auth().getUsers(chunk);
     users.filter((u) => u.emailVerified).forEach((u) => verified.add(u.uid));
   }
-  return snap.docs.filter((d) => verified.has(d.id));
+  // A diagnostic visit is paid up front to the técnico's Stripe account, so
+  // only técnicos who can receive it may take one.
+  return snap.docs.filter((d) =>
+    verified.has(d.id) && (!requiresPayouts || !!d.get('stripeConnectAccountId')));
 }
 
 async function notifyAdmins(
@@ -119,7 +125,21 @@ export const onServiceCreated = onDocumentCreated(
     const urgencia = (service.urgencia as string) || 'normal';
     const tipoAsignacion = (service.tipoAsignacion as string) || 'automatica';
 
-    const candidates = await eligibleTechnicians(categoria);
+    // The flow (standard or with a paid diagnostic visit) and the visit fee
+    // come from the category config — set here, server-side, so the cliente
+    // cannot choose a cheaper flow. categoryFlow() is cached per instance.
+    const cat = await categoryFlow(categoria);
+    const diag = cat.flujo === FLUJO.diagnostico;
+    const flowFields = diag
+      ? { flujo: FLUJO.diagnostico, visita: { precio: cat.precioDiagnostico, pagoEstado: PAGO.sinAutorizar } }
+      : { flujo: FLUJO.estandar };
+
+    const candidates = await eligibleTechnicians(categoria, diag);
+
+    if (candidates.length === 0 || tipoAsignacion !== 'automatica') {
+      // No assignment happens here, so this is the one write that records the flow.
+      await snap.ref.update(flowFields);
+    }
 
     if (candidates.length === 0) {
       // eslint-disable-next-line no-console
@@ -164,12 +184,15 @@ export const onServiceCreated = onDocumentCreated(
     const workloads = new Map<string, number>();
     await Promise.all(
       candidates.map(async (doc) => {
+        // count() aggregation: billed as one read per 1,000 matches instead
+        // of one read per service in flight.
         const active = await db
           .collection('servicios')
           .where('tecnicoId', '==', doc.id)
           .where('estado', 'in', ACTIVE_WORK_STATES)
+          .count()
           .get();
-        workloads.set(doc.id, active.size);
+        workloads.set(doc.id, active.data().count);
       }),
     );
 
@@ -215,6 +238,7 @@ export const onServiceCreated = onDocumentCreated(
     const best = scored[0];
 
     await snap.ref.update({
+      ...flowFields,
       tecnicoId: best.uid,
       tecnicoNombre: best.nombre,
       estado: 'asignado',

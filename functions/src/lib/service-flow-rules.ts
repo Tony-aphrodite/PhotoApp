@@ -40,6 +40,12 @@ export const ESTADO = {
   completado: 'completado',
   pagado: 'pagado',
   cancelado: 'cancelado',
+  // Diagnostic-visit flow (Phase 2) — see lib/visit-rules.ts.
+  visitaPropuesta: 'visita_propuesta',
+  visitaConfirmada: 'visita_confirmada',
+  enCamino: 'en_camino',
+  diagnosticoRealizado: 'diagnostico_realizado',
+  reporteNoLlego: 'reporte_no_llego',
   // Written by the old client-side approval before this flow existed.
   legacyEnReparacion: 'en_reparacion',
 } as const;
@@ -47,6 +53,11 @@ export const ESTADO = {
 /** States where the técnico is working (or was, until a stop). */
 export const ACTIVE_WORK_STATES: string[] = [
   ESTADO.asignado,
+  ESTADO.visitaPropuesta,
+  ESTADO.visitaConfirmada,
+  ESTADO.enCamino,
+  ESTADO.diagnosticoRealizado,
+  ESTADO.reporteNoLlego,
   ESTADO.cotizacionEnviada,
   ESTADO.cotizacionRechazada,
   ESTADO.cotizacionAprobada,
@@ -145,6 +156,9 @@ export function quotationKindFor(estado: string): QuotationKind | null {
   switch (estado) {
     case ESTADO.asignado:
     case ESTADO.cotizacionRechazada:
+    // Diagnostic flow: the repair quote comes once the técnico is on site.
+    case ESTADO.enCamino:
+    case ESTADO.diagnosticoRealizado:
       return 'inicial';
     case ESTADO.enProgreso:
     case ESTADO.revisionRechazada:
@@ -206,7 +220,7 @@ export interface StopInput {
  *
  * The proposed amount can never exceed what the cliente already approved.
  */
-export function validateStop(raw: unknown, montoAprobado: number): StopInput {
+export function validateStop(raw: unknown, montoAprobado: number, montoMinimo = 0): StopInput {
   const r = (raw ?? {}) as Record<string, unknown>;
   const motivo = r.motivo as string;
   if (!(motivo in STOP_REASONS)) throw new FlowError('Selecciona el motivo para detener el trabajo.');
@@ -225,6 +239,13 @@ export function validateStop(raw: unknown, montoAprobado: number): StopInput {
   const monto = r.montoPropuesto;
   if (typeof monto !== 'number' || !Number.isFinite(monto) || monto < 0) {
     throw new FlowError('Indica el monto por el trabajo realizado.');
+  }
+  // In the diagnostic flow the visit already charged is the floor; only an
+  // admin, resolving a dispute, may go below it.
+  if (round2(monto) < round2(montoMinimo)) {
+    throw new FlowError(
+      `El monto no puede ser menor que la visita de diagnóstico ya cobrada ($${round2(montoMinimo).toFixed(2)}).`,
+    );
   }
   if (round2(monto) > round2(montoAprobado)) {
     throw new FlowError(

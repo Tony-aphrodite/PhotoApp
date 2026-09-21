@@ -11,9 +11,20 @@
  * The rules themselves are in lib/service-flow-rules.ts, with tests.
  */
 
-import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, admin } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
+import {
+  Data,
+  OPTS,
+  guarded,
+  isAdminUid,
+  now,
+  readService,
+  requireVerified,
+  systemMessage,
+  wrongState,
+} from './lib/flow-helpers';
 import {
   ESTADO,
   FlowError,
@@ -21,7 +32,6 @@ import {
   STOPPABLE_STATES,
   STOP_REASONS,
   awaitingStateFor,
-  closingFor,
   fmtMxn,
   priceQuotation,
   quotationKindFor,
@@ -31,60 +41,8 @@ import {
   stateAfterWorkAction,
   validateStop,
 } from './lib/service-flow-rules';
-
-type Tx = FirebaseFirestore.Transaction;
-type Data = FirebaseFirestore.DocumentData;
-
-const OPTS = { region: 'us-central1', memory: '256MiB' as const };
-const now = () => admin.firestore.FieldValue.serverTimestamp();
-
-/** Signed in with a verified email; returns the uid. */
-function requireVerified(req: CallableRequest<unknown>): string {
-  const uid = req.auth?.uid;
-  if (!uid) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
-  if (req.auth?.token.email_verified !== true) {
-    throw new HttpsError('failed-precondition', 'Verifica tu correo antes de continuar.');
-  }
-  return uid;
-}
-
-/** Runs `fn`, turning a broken flow rule into a user-facing HttpsError. */
-async function guarded<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    if (err instanceof FlowError) throw new HttpsError('failed-precondition', err.message);
-    throw err;
-  }
-}
-
-async function readService(tx: Tx, servicioId: unknown) {
-  if (typeof servicioId !== 'string' || !servicioId) {
-    throw new HttpsError('invalid-argument', 'Falta el servicio.');
-  }
-  const ref = db.collection('servicios').doc(servicioId);
-  const snap = await tx.get(ref);
-  if (!snap.exists) throw new HttpsError('not-found', 'Servicio no encontrado.');
-  return { ref, id: servicioId, data: snap.data() as Data };
-}
-
-function systemMessage(tx: Tx, servicioId: string, mensaje: string, metadata: Data) {
-  tx.set(db.collection('servicios').doc(servicioId).collection('mensajes').doc(), {
-    userId: 'system',
-    nombreUsuario: 'ServiTec',
-    mensaje,
-    tipo: 'sistema',
-    timestamp: now(),
-    leido: false,
-    metadata,
-  });
-}
-
-function wrongState(): never {
-  throw new FlowError(
-    'El servicio cambió de estado. Actualiza la pantalla e inténtalo de nuevo.',
-  );
-}
+import { FLUJO, finalClose, remainingAfterVisit, visitPaidOf } from './lib/visit-rules';
+import { incidentUpdate, refundVisit, scheduleFor } from './lib/visit-store';
 
 // ---------------------------------------------------------------------------
 // Quotations
@@ -117,6 +75,10 @@ export const submitQuotation = onCall<SubmitQuotationInput>(OPTS, (req) =>
       }
       const kind = quotationKindFor(s.data.estado);
       if (!kind) wrongState();
+      if (s.data.flujo === FLUJO.diagnostico && kind === 'inicial' && s.data.estado === ESTADO.asignado) {
+        throw new FlowError('Este servicio requiere visita de diagnóstico: primero agenda la visita.');
+      }
+      const pagado = visitPaidOf(s.data);
 
       const previous = await tx.get(
         db.collection('cotizaciones').where('servicioId', '==', s.id).where('tecnicoId', '==', uid),
@@ -140,13 +102,21 @@ export const submitQuotation = onCall<SubmitQuotationInput>(OPTS, (req) =>
       tx.update(s.ref, {
         estado: stateAfterSubmit(kind),
         cotizacionPendienteId: cotRef.id,
+        ...scheduleFor(s.data, stateAfterSubmit(kind)),
         updatedAt: now(),
       });
       systemMessage(
         tx,
         s.id,
         kind === 'inicial'
-          ? `Cotización enviada — Total: ${fmtMxn(priced.total)} (IVA incluido). Revísala para aprobarla o rechazarla.`
+          ? `Cotización enviada — Total: ${fmtMxn(priced.total)} (IVA incluido).` +
+            (pagado > 0
+              ? ` Ya pagaste ${fmtMxn(pagado)} de diagnóstico, que se descuentan: ${
+                remainingAfterVisit(priced.total, pagado) > 0
+                  ? `restarían ${fmtMxn(remainingAfterVisit(priced.total, pagado))}.`
+                  : 'no tendrías que pagar nada más.'}`
+              : '') +
+            ' Revísala para aprobarla o rechazarla.'
           : `Cotización revisada enviada — de ${fmtMxn(montoAnterior ?? 0)} a ${fmtMxn(priced.total)}. El trabajo adicional requiere tu aprobación.`,
         { event: kind === 'inicial' ? 'quotation_sent' : 'quotation_revision_sent', cotizacionId: cotRef.id, total: priced.total },
       );
@@ -186,10 +156,12 @@ export const respondQuotation = onCall<{ cotizacionId?: string; respuesta?: stri
       }
 
       tx.update(cotRef, { estado: respuesta, fechaRespuesta: now() });
+      const next = stateAfterResponse(kind, aprobada);
       tx.update(s.ref, {
-        estado: stateAfterResponse(kind, aprobada),
+        estado: next,
         cotizacionPendienteId: admin.firestore.FieldValue.delete(),
         ...(aprobada ? { costoFinal: cot.total, cotizacionAprobadaId: cotizacionId } : {}),
+        ...scheduleFor(s.data, next),
         updatedAt: now(),
       });
 
@@ -240,14 +212,35 @@ export const serviceWorkAction = onCall<{ servicioId?: string; accion?: string }
         throw new FlowError('El servicio no tiene un monto aprobado.');
       }
 
+      // Diagnostic flow: the visit already paid is credited, and may cover
+      // the whole price (it is the minimum), in which case nothing is left to
+      // pay and the service closes here.
+      const pagado = visitPaidOf(s.data);
+      const close = accion === 'completar' && pagado > 0 ? finalClose(s.data.costoFinal, pagado) : null;
+      const estado = close ? close.estado : next;
+
       tx.update(s.ref, {
-        estado: next,
+        estado,
         ...(accion === 'iniciar' ? { iniciadoAt: now() } : {}),
         ...(accion === 'completar' ? { completadoAt: now() } : {}),
+        ...(close?.cierre ? { cierre: close.cierre } : {}),
+        ...scheduleFor(s.data, estado),
         updatedAt: now(),
       });
-      systemMessage(tx, s.id, WORK_MESSAGES[accion](s.data), { event: `work_${accion}`, estado: next });
-      return { estado: next };
+      if (estado === ESTADO.pagado) {
+        // No payment will follow, so the webhook that normally counts a
+        // completed job never fires; count it here.
+        tx.update(db.collection('users').doc(uid), {
+          serviciosCompletados: admin.firestore.FieldValue.increment(1),
+        });
+      }
+      const mensaje = !close
+        ? WORK_MESSAGES[accion](s.data)
+        : estado === ESTADO.pagado
+          ? `Trabajo terminado. El total (${fmtMxn(s.data.costoFinal)}) queda cubierto por la visita de diagnóstico ya pagada; no hay nada más que pagar.`
+          : `Trabajo terminado. Total ${fmtMxn(s.data.costoFinal)} menos la visita ya pagada (${fmtMxn(pagado)}): restan ${fmtMxn(remainingAfterVisit(s.data.costoFinal, pagado))}.`;
+      systemMessage(tx, s.id, mensaje, { event: `work_${accion}`, estado });
+      return { estado };
     });
   }),
 );
@@ -272,13 +265,15 @@ export const stopWork = onCall<Data>(OPTS, (req) =>
       }
       if (!STOPPABLE_STATES.includes(s.data.estado)) wrongState();
       const montoAprobado = (s.data.costoFinal as number | undefined) ?? 0;
-      const stop = validateStop(req.data, montoAprobado);
+      const stop = validateStop(req.data, montoAprobado, visitPaidOf(s.data));
 
       tx.update(s.ref, {
         estado: ESTADO.detenido,
         detencion: { ...stop, montoAprobadoPrevio: montoAprobado, creadoAt: now() },
+        ...scheduleFor(s.data, ESTADO.detenido),
         updatedAt: now(),
       });
+      tx.update(db.collection('users').doc(uid), incidentUpdate('detenidos'));
       tx.set(db.collection('admin_flags').doc(), {
         type: 'work_stopped',
         servicioId: s.id,
@@ -319,10 +314,13 @@ export const respondStop = onCall<{ servicioId?: string; respuesta?: string; com
       const monto = (s.data.detencion?.montoPropuesto as number | undefined) ?? 0;
 
       if (respuesta === 'aceptar') {
-        const close = closingFor(monto);
+        // The técnico's amount is never below the visit already paid
+        // (validateStop), so accepting never triggers a refund.
+        const close = finalClose(monto, visitPaidOf(s.data));
         tx.update(s.ref, {
           estado: close.estado,
           ...(close.costoFinal != null ? { costoFinal: close.costoFinal, completadoAt: now() } : {}),
+          ...(close.cierre ? { cierre: close.cierre } : {}),
           'detencion.respuestaCliente': 'aceptada',
           updatedAt: now(),
         });
@@ -380,8 +378,7 @@ export const adminResolveDispute = onCall<{ servicioId?: string; monto?: number;
   guarded(async () => {
     const uid = req.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
-    const caller = await db.collection('users').doc(uid).get();
-    if (caller.get('rol') !== 'admin') throw new HttpsError('permission-denied', 'Solo administradores.');
+    if (!(await isAdminUid(uid))) throw new HttpsError('permission-denied', 'Solo administradores.');
 
     const monto = req.data?.monto;
     const nota = typeof req.data?.nota === 'string' ? req.data.nota.trim().slice(0, 1000) : '';
@@ -390,28 +387,42 @@ export const adminResolveDispute = onCall<{ servicioId?: string; monto?: number;
     }
     if (nota.length < 5) throw new FlowError('Agrega una nota que explique la resolución.');
 
-    return db.runTransaction(async (tx) => {
-      const s = await readService(tx, req.data?.servicioId);
+    const servicioId = req.data?.servicioId;
+    // 1. Validate and work out the settlement.
+    const pre = await db.runTransaction(async (tx) => {
+      const s = await readService(tx, servicioId);
       if (s.data.estado !== ESTADO.enDisputa) wrongState();
       const tope = (s.data.detencion?.montoAprobadoPrevio as number | undefined) ?? 0;
       if (round2(monto) > round2(tope)) {
         throw new FlowError(`El monto no puede superar lo aprobado por el cliente (${fmtMxn(tope)}).`);
       }
-      const close = closingFor(monto);
+      // Unlike the técnico, an admin may go below the visit already paid —
+      // e.g. when the técnico was at fault — and the difference is refunded.
+      return { data: s.data, close: finalClose(monto, visitPaidOf(s.data)) };
+    });
+
+    // 2. Refund outside the transaction (idempotency key in refundVisit).
+    if (pre.close.refund > 0) await refundVisit(pre.data.visita.paymentIntentId, pre.close.refund);
+
+    // 3. Commit.
+    return db.runTransaction(async (tx) => {
+      const s = await readService(tx, servicioId);
+      if (s.data.estado !== ESTADO.enDisputa) wrongState();
+      const close = pre.close;
       tx.update(s.ref, {
         estado: close.estado,
         ...(close.costoFinal != null ? { costoFinal: close.costoFinal, completadoAt: now() } : {}),
-        resolucion: { monto: round2(monto), nota, adminUid: uid, resueltoAt: now() },
+        ...(close.cierre ? { cierre: close.cierre } : {}),
+        ...(close.refund > 0 ? { 'visita.montoReembolsado': close.refund } : {}),
+        resolucion: { monto: round2(monto), reembolso: close.refund, nota, adminUid: uid, resueltoAt: now() },
         updatedAt: now(),
       });
-      systemMessage(
-        tx,
-        s.id,
-        close.costoFinal != null
-          ? `ServiTec resolvió el caso: monto final ${fmtMxn(close.costoFinal)}. Nota: ${nota}`
-          : `ServiTec resolvió el caso: el servicio se cierra sin cobro. Nota: ${nota}`,
-        { event: 'dispute_resolved', monto: round2(monto) },
-      );
+      const detalle = close.refund > 0
+        ? `ServiTec resolvió el caso: monto final ${fmtMxn(monto)}; se reembolsarán ${fmtMxn(close.refund)} de la visita.`
+        : close.costoFinal != null
+          ? `ServiTec resolvió el caso: monto final ${fmtMxn(close.costoFinal)}.`
+          : 'ServiTec resolvió el caso: el servicio se cierra sin cobro.';
+      systemMessage(tx, s.id, `${detalle} Nota: ${nota}`, { event: 'dispute_resolved', monto: round2(monto) });
       return { estado: close.estado };
     });
   }),

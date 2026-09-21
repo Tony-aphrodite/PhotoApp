@@ -21,6 +21,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { db, admin } from './lib/admin';
 import { stripe, applicationFeeCentavos } from './lib/stripe';
+import { remainingAfterVisit, visitPaidOf } from './lib/visit-rules';
 
 interface CreatePaymentIntentBody {
   servicioId?: string;
@@ -40,10 +41,13 @@ const PAYABLE_STATES = ['completado', 'pago_pendiente'];
  * tariff-based `estimacionCosto`.
  */
 function serviceAmountCentavos(service: FirebaseFirestore.DocumentData): number {
-  const mxn =
+  const total =
     (service.costoFinal as number | undefined) ??
     (service.estimacionCosto as number | undefined) ??
     0;
+  // Diagnostic flow: the visit fee was charged separately and is credited.
+  const paid = visitPaidOf(service);
+  const mxn = paid > 0 ? remainingAfterVisit(total, paid) : total;
   return Math.round(mxn * 100);
 }
 
@@ -145,6 +149,9 @@ export const createPaymentIntent = onRequest(
           tecnicoUid,
           clienteUid: (service.clienteId as string) || '',
           platformCommissionCentavos: String(feeCentavos),
+          // 'saldo' = the rest of a diagnostic service after its visit fee;
+          // on-payment-succeeded tells the two charges apart by this.
+          concepto: visitPaidOf(service) > 0 ? 'saldo' : 'servicio',
         },
       });
 
