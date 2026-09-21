@@ -527,6 +527,15 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
                   _buildCostEstimationCard(),
                 ],
 
+                // Diagnostic-visit categories: say up front what the visit
+                // costs and how it is credited, before the request is sent.
+                if (_selectedCategory != null &&
+                    (CategoryCatalog.byKey(_selectedCategory!)?.isDiagnostic ?? false)) ...[
+                  const SizedBox(height: 16),
+                  _DiagnosticNotice(
+                      precio: CategoryCatalog.byKey(_selectedCategory!)!.precioDiagnostico),
+                ],
+
                 const SizedBox(height: 28),
                 _buildSectionDivider(),
                 const SizedBox(height: 28),
@@ -1111,6 +1120,43 @@ class _PremiumUrgencyOption extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class _DiagnosticNotice extends StatelessWidget {
+  final double precio;
+
+  const _DiagnosticNotice({required this.precio});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.infoColor.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLarge),
+        border: Border.all(color: AppTheme.infoColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Este servicio requiere visita de diagnóstico',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Antes de cotizar, el técnico revisa el problema en tu domicilio. La visita cuesta '
+            '${CurrencyFormatter.format(precio)} y se descuenta del total si apruebas la reparación. '
+            'La confirmas y autorizas con tarjeta cuando el técnico te proponga el horario.',
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 13, height: 1.5, color: AppTheme.textSecondary),
+          ),
+        ],
       ),
     );
   }

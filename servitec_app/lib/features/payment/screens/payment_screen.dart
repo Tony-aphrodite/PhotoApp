@@ -42,7 +42,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       final comisionConfig = await configRepo.getComisionConfig();
 
       final paymentRepo = context.read<PaymentRepository>();
-      final amount = service.costoFinal ?? service.estimacionCosto ?? 0;
+      // What this charge will be: the full price, or — in the diagnostic
+      // flow — the price minus the visit already paid. The server computes
+      // the same (createPaymentIntent) and is what Stripe actually charges.
+      final amount = service.amountDue;
       final breakdown = paymentRepo.calculateCommission(
         montoTotal: amount,
         // Must match the server-side PLATFORM_COMMISSION_PCT env var
@@ -368,6 +371,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                                           Colors.white.withValues(alpha: 0.7),
                                     ),
                                   ),
+                                  if (_service!.visitPaid > 0)
+                                    Text(
+                                      'Servicio ${CurrencyFormatter.format(_service!.costoFinal ?? 0)} − '
+                                      'visita pagada ${CurrencyFormatter.format(_service!.visitPaid)}',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: Colors.white.withValues(alpha: 0.7),
+                                      ),
+                                    ),
                                   const SizedBox(height: 4),
                                   Text(
                                     CurrencyFormatter.format(

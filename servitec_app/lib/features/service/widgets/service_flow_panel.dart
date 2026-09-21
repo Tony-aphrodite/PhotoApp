@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter_stripe/flutter_stripe.dart' hide Card;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/analytics_service.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/category_catalog.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/quotation_model.dart';
@@ -279,11 +282,173 @@ class _ServiceFlowPanelState extends State<ServiceFlowPanel> {
   // Layout
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Diagnostic visit
+  // ---------------------------------------------------------------------------
+
+  Future<void> _visit(String accion, String done, [Map<String, dynamic> extra = const {}]) =>
+      _run(() => _flow.visitAction(s.id, accion, extra), done);
+
+  Future<void> _proposeVisit() async {
+    final today = DateTime.now();
+    final day = await showDatePicker(
+      context: context,
+      initialDate: s.visita?.fecha ?? today.add(const Duration(days: 1)),
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 60)),
+      helpText: 'Día de la visita',
+    );
+    if (day == null || !mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 10, minute: 0),
+      helpText: 'Hora de la visita',
+    );
+    if (time == null) return;
+    final fecha = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    await _visit('proponer', 'Horario enviado al cliente.',
+        {'fecha': fecha.toUtc().toIso8601String()});
+  }
+
+  /// Hold the visit fee on the cliente's card: the server creates the
+  /// PaymentIntent, Stripe's sheet collects the card, the server verifies the
+  /// hold before confirming the appointment.
+  Future<void> _authorizeVisit() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await _flow.visitAction(s.id, 'autorizar');
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: res['clientSecret'] as String,
+          merchantDisplayName: 'ServiTec',
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+      await _flow.visitAction(s.id, 'confirmar_autorizacion');
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Visita confirmada. El monto quedó retenido; se cobra cuando el técnico salga.'),
+        backgroundColor: AppTheme.successColor,
+      ));
+    } on StripeException catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e.error.code == FailureCode.Canceled
+            ? 'Autorización cancelada.'
+            : e.error.localizedMessage ?? 'No se pudo autorizar el pago.'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e is FlowException ? e.message : 'Error: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _withdraw() async {
+    final charged = s.visita?.isCharged ?? false;
+    final held = (s.visita?.isHeld ?? false) || (s.visita?.needsReauthorization ?? false);
+    if (!await _confirm(
+      'Cancelar mi asignación',
+      '${charged ? 'Se reembolsará la visita al cliente. ' : held ? 'Se liberará el monto retenido al cliente. ' : ''}'
+          'El servicio volverá a ServiTec para asignarlo a otro técnico y la cancelación quedará en tu historial.',
+      ok: 'Cancelar asignación',
+    )) {
+      return;
+    }
+    await _visit('retirarse', 'Te retiraste del servicio.');
+  }
+
+  Future<void> _requireDiagnosis() async {
+    final price = CategoryCatalog.byKey(s.categoria)?.precioDiagnostico ?? 0;
+    if (!await _confirm(
+      'Requiere visita de diagnóstico',
+      'Usa esta opción si con la solicitud no se puede saber cuál es el problema. '
+          'El cliente pagará la visita${price > 0 ? ' (${CurrencyFormatter.format(price)})' : ''} antes de que vayas, '
+          'y se le descontará si aprueba la reparación.',
+    )) {
+      return;
+    }
+    await _visit('requerir_diagnostico', 'Listo. Ahora propón el horario de la visita.');
+  }
+
+  Future<void> _requestOtherTime() async {
+    final comment = await _askText(
+      title: 'Pedir otro horario',
+      hint: '¿Qué días u horarios te funcionan?',
+      ok: 'Enviar',
+    );
+    if (comment == null) return;
+    await _visit('pedir_otro_horario', 'Le pedimos al técnico otro horario.', {'comentario': comment});
+  }
+
+  Future<void> _reportNoShow() async {
+    final comment = await _askText(
+      title: 'El técnico no llegó',
+      hint: 'Cuéntanos qué pasó (hora, si te contactó, etc.)',
+      ok: 'Enviar a ServiTec',
+    );
+    if (comment == null) return;
+    await _visit('reportar_no_llego', 'Reporte enviado. ServiTec revisará el caso.', {'comentario': comment});
+  }
+
+  Future<void> _closeDiagnosisOnly() async {
+    if (!await _confirm(
+      'No continuar con la reparación',
+      'El servicio se cerrará y solo pagarás la visita de diagnóstico '
+          '(${CurrencyFormatter.format(s.visitPaid)}), que ya fue cobrada.',
+      ok: 'Cerrar servicio',
+    )) {
+      return;
+    }
+    await _visit('cerrar_solo_diagnostico', 'Servicio cerrado.');
+  }
+
+  Future<void> _resolveNoShow() async {
+    final nota = TextEditingController();
+    final decision = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Reporte: el técnico no llegó',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+        content: TextField(
+          controller: nota,
+          maxLines: 3,
+          decoration: const InputDecoration(labelText: 'Nota para cliente y técnico'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No procede')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Reembolsar y reasignar'),
+          ),
+        ],
+      ),
+    );
+    if (decision == null) return;
+    await _visit('resolver_no_llego', 'Reporte resuelto.',
+        {'reembolsar': decision, 'nota': nota.text.trim()});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Layout
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     final children = <Widget>[
+      if (s.isDiagnostic && s.visita != null)
+        _VisitCard(service: s, forClient: widget.isClient),
       _QuotationHistory(stream: _quotations),
       if (s.detencion != null) _StopCard(stop: s.detencion!, resolucionNota: s.resolucionNota),
+      if (s.autoCierreAt != null)
+        _Note('Si no hay respuesta, el servicio se cerrará automáticamente el '
+            '${DateFormat("d 'de' MMMM, HH:mm", 'es').format(s.autoCierreAt!)} '
+            'solo con el pago de la visita.'),
       ..._actions(),
     ];
     return Column(
@@ -294,102 +459,252 @@ class _ServiceFlowPanelState extends State<ServiceFlowPanel> {
     );
   }
 
-  List<Widget> _actions() {
-    final approved = CurrencyFormatter.format(s.costoFinal ?? 0);
+  static const _withdrawable = {
+    AppConstants.statusAssigned,
+    AppConstants.statusVisitProposed,
+    AppConstants.statusVisitConfirmed,
+    AppConstants.statusOnTheWay,
+    AppConstants.statusQuoteSent,
+    AppConstants.statusQuoteRejected,
+    AppConstants.statusQuoteApproved,
+  };
 
-    if (widget.isTechnician) {
+  List<Widget> _actions() {
+    final actions = widget.isTechnician
+        ? _technicianActions()
+        : widget.isClient
+            ? _clientActions()
+            : widget.isAdmin
+                ? _adminActions()
+                : const <Widget>[];
+    return [
+      ...actions,
+      if (widget.isTechnician && _withdrawable.contains(s.estado))
+        _Danger('Cancelar mi asignación', _busy ? () {} : _withdraw),
+    ];
+  }
+
+  List<Widget> _technicianActions() {
+    final approved = CurrencyFormatter.format(s.costoFinal ?? 0);
+    final v = s.visita;
+
+    if (s.isDiagnostic) {
       switch (s.estado) {
         case AppConstants.statusAssigned:
           return [
-            _Note('Revisa la solicitud y envía tu cotización. El cliente debe aprobarla antes de que inicies.'),
-            _Primary('Enviar cotización', Icons.request_quote_outlined,
+            _Note(v?.solicitudCambio != null
+                ? 'El cliente pidió otro horario: "${v!.solicitudCambio}". Propón uno nuevo.'
+                : 'Este servicio requiere visita de diagnóstico. Propón el día y la hora; '
+                    'el cliente la confirma y autoriza el pago antes de que vayas.'),
+            _Primary('Proponer horario de visita', Icons.event_available_rounded,
+                _busy ? null : _proposeVisit),
+          ];
+        case AppConstants.statusVisitProposed:
+          return [
+            _Note('Esperando que el cliente confirme el horario y autorice el pago de la visita.'),
+            _Secondary('Cambiar horario', Icons.edit_calendar_rounded, _busy ? null : _proposeVisit),
+          ];
+        case AppConstants.statusVisitConfirmed:
+          final from = v?.onTheWayFrom;
+          final canGo = from != null && !DateTime.now().isBefore(from);
+          return [
+            if (v?.needsReauthorization ?? false)
+              _Note('El cliente debe volver a autorizar el pago. Si no lo hace 24 horas antes, la visita se cancela.'),
+            _Primary(
+              canGo || from == null
+                  ? 'Voy en camino'
+                  : 'Voy en camino (desde las ${DateFormat('HH:mm').format(from)})',
+              Icons.directions_car_rounded,
+              _busy || !canGo || !(v?.isHeld ?? false)
+                  ? null
+                  : () async {
+                      if (await _confirm('Voy en camino',
+                          'Se cobrará la visita al cliente y desde ese momento ya no será reembolsable si cancela.')) {
+                        await _visit('en_camino', 'Listo. Se avisó al cliente.');
+                      }
+                    },
+            ),
+          ];
+        case AppConstants.statusOnTheWay:
+          return [
+            _Note('Al terminar el diagnóstico, envía la cotización de la reparación. '
+                'Al cliente se le descontará la visita ya pagada.'),
+            _Primary('Enviar cotización de reparación', Icons.request_quote_outlined,
                 () => context.push('/quotation/create/${s.id}')),
+            _Secondary('Terminé el diagnóstico, cotizo después', Icons.fact_check_outlined,
+                _busy ? null : () => _visit('diagnostico_terminado', 'Diagnóstico registrado.')),
+          ];
+        case AppConstants.statusDiagnosed:
+          return [
+            _Primary('Enviar cotización de reparación', Icons.request_quote_outlined,
+                () => context.push('/quotation/create/${s.id}')),
+          ];
+        case AppConstants.statusNoShowReported:
+          return [_Note('El cliente reportó que no llegaste. ServiTec está revisando el caso.')];
+      }
+    }
+
+    switch (s.estado) {
+      case AppConstants.statusAssigned:
+        return [
+          _Note('Revisa la solicitud y envía tu cotización. El cliente debe aprobarla antes de que inicies.'),
+          _Primary('Enviar cotización', Icons.request_quote_outlined,
+              () => context.push('/quotation/create/${s.id}')),
+          _Secondary('Requiere visita de diagnóstico', Icons.troubleshoot_rounded,
+              _busy ? null : _requireDiagnosis),
+        ];
+      case AppConstants.statusQuoteRejected:
+        return [
+          _Note('El cliente rechazó la cotización. Puedes enviar una nueva.'),
+          _Primary('Enviar nueva cotización', Icons.request_quote_outlined,
+              () => context.push('/quotation/create/${s.id}')),
+        ];
+      case AppConstants.statusQuoteSent:
+      case AppConstants.statusRevisionSent:
+        return [_Note('Esperando la respuesta del cliente a tu cotización.')];
+      case AppConstants.statusQuoteApproved:
+      case 'en_reparacion':
+        return [
+          _Primary('Iniciar trabajo ($approved)', Icons.play_arrow_rounded,
+              _busy ? null : () => _workAction('iniciar')),
+        ];
+      case AppConstants.statusInProgress:
+        return [
+          _Primary('Marcar como terminado', Icons.check_circle_outline_rounded,
+              _busy ? null : () => _workAction('completar')),
+          _Secondary('Encontré un problema adicional', Icons.edit_note_rounded,
+              () => context.push('/quotation/create/${s.id}?revision=1')),
+          _Danger('Detener trabajo', () => context.push('/service/${s.id}/stop')),
+        ];
+      case AppConstants.statusRevisionRejected:
+        return [
+          _Note('El cliente rechazó la cotización revisada. Termina solo el trabajo aprobado ($approved) '
+              'si es técnicamente posible y seguro; si no, detén el trabajo y documenta el motivo.'),
+          _Primary('Continuar con el trabajo original', Icons.play_arrow_rounded,
+              _busy ? null : () => _workAction('continuar_original')),
+          _Secondary('Enviar otra cotización revisada', Icons.edit_note_rounded,
+              () => context.push('/quotation/create/${s.id}?revision=1')),
+          _Danger('Detener trabajo', () => context.push('/service/${s.id}/stop')),
+        ];
+      case AppConstants.statusStopped:
+        return [_Note('Esperando que el cliente acepte el monto propuesto.')];
+      case AppConstants.statusDisputed:
+        return [_Note('El cliente no aceptó el monto. ServiTec está revisando el caso.')];
+    }
+    return const [];
+  }
+
+  List<Widget> _clientActions() {
+    final v = s.visita;
+    final precio = CurrencyFormatter.format(v?.precio ?? 0);
+
+    if (s.isDiagnostic) {
+      switch (s.estado) {
+        case AppConstants.statusAssigned:
+          return [_Note('El técnico te propondrá un horario para la visita de diagnóstico.')];
+        case AppConstants.statusVisitProposed:
+          return [
+            _Primary('Confirmar y autorizar $precio', Icons.lock_clock_rounded,
+                _busy ? null : _authorizeVisit),
+            _Secondary('Pedir otro horario', Icons.edit_calendar_rounded,
+                _busy ? null : _requestOtherTime),
+          ];
+        case AppConstants.statusVisitConfirmed:
+          if (v?.needsReauthorization ?? false) {
+            return [
+              _Note('Tu visita es en más de 6 días, así que la autorización del pago debe renovarse. '
+                  'Autorízala de nuevo antes de 24 horas de la cita o la visita se cancelará sin costo.'),
+              _Primary('Autorizar de nuevo $precio', Icons.lock_reset_rounded,
+                  _busy ? null : _authorizeVisit),
+            ];
+          }
+          return const [];
+        case AppConstants.statusOnTheWay:
+          final from = v?.noShowReportFrom;
+          final canReport = from != null && !DateTime.now().isBefore(from);
+          return [
+            _Note('El técnico va en camino. Cuando termine el diagnóstico te enviará la cotización de la reparación.'),
+            if (canReport)
+              _Secondary('El técnico no llegó', Icons.report_outlined, _busy ? null : _reportNoShow),
+          ];
+        case AppConstants.statusDiagnosed:
+          return [
+            _Note('El técnico terminó el diagnóstico y te enviará la cotización de la reparación.'),
+            _Secondary('No quiero la reparación', Icons.do_not_disturb_on_outlined,
+                _busy ? null : _closeDiagnosisOnly),
           ];
         case AppConstants.statusQuoteRejected:
           return [
-            _Note('El cliente rechazó la cotización. Puedes enviar una nueva.'),
-            _Primary('Enviar nueva cotización', Icons.request_quote_outlined,
-                () => context.push('/quotation/create/${s.id}')),
+            _Note('Rechazaste la cotización. El técnico puede enviarte otra.'),
+            _Secondary('No quiero la reparación', Icons.do_not_disturb_on_outlined,
+                _busy ? null : _closeDiagnosisOnly),
           ];
-        case AppConstants.statusQuoteSent:
-        case AppConstants.statusRevisionSent:
-          return [_Note('Esperando la respuesta del cliente a tu cotización.')];
-        case AppConstants.statusQuoteApproved:
-        case 'en_reparacion':
-          return [
-            _Primary('Iniciar trabajo ($approved)', Icons.play_arrow_rounded,
-                _busy ? null : () => _workAction('iniciar')),
-          ];
-        case AppConstants.statusInProgress:
-          return [
-            _Primary('Marcar como terminado', Icons.check_circle_outline_rounded,
-                _busy ? null : () => _workAction('completar')),
-            _Secondary('Encontré un problema adicional', Icons.edit_note_rounded,
-                () => context.push('/quotation/create/${s.id}?revision=1')),
-            _Danger('Detener trabajo', () => context.push('/service/${s.id}/stop')),
-          ];
-        case AppConstants.statusRevisionRejected:
-          return [
-            _Note('El cliente rechazó la cotización revisada. Termina solo el trabajo aprobado ($approved) '
-                'si es técnicamente posible y seguro; si no, detén el trabajo y documenta el motivo.'),
-            _Primary('Continuar con el trabajo original', Icons.play_arrow_rounded,
-                _busy ? null : () => _workAction('continuar_original')),
-            _Secondary('Enviar otra cotización revisada', Icons.edit_note_rounded,
-                () => context.push('/quotation/create/${s.id}?revision=1')),
-            _Danger('Detener trabajo', () => context.push('/service/${s.id}/stop')),
-          ];
-        case AppConstants.statusStopped:
-          return [_Note('Esperando que el cliente acepte el monto propuesto.')];
-        case AppConstants.statusDisputed:
-          return [_Note('El cliente no aceptó el monto. ServiTec está revisando el caso.')];
+        case AppConstants.statusNoShowReported:
+          return [_Note('ServiTec está revisando tu reporte y decidirá si procede el reembolso.')];
       }
-      return const [];
     }
 
-    if (widget.isClient) {
-      switch (s.estado) {
-        case AppConstants.statusQuoteSent:
-        case AppConstants.statusRevisionSent:
-          final pending = s.cotizacionPendienteId;
-          return [
-            _Note(s.estado == AppConstants.statusRevisionSent
-                ? 'El técnico encontró algo adicional y envió una cotización revisada. Tu aprobación es necesaria para continuar.'
-                : 'El técnico envió su cotización. Revísala para aprobarla o rechazarla.'),
-            if (pending != null)
-              _Primary('Revisar cotización', Icons.receipt_long_outlined,
-                  () => context.push('/quotation/review/$pending')),
-          ];
-        case AppConstants.statusStopped:
-          final stop = s.detencion;
-          if (stop == null) return const [];
-          return [
-            _Primary(
-              stop.montoPropuesto >= 10
-                  ? 'Aceptar ${CurrencyFormatter.format(stop.montoPropuesto)}'
-                  : 'Aceptar cierre sin cobro',
-              Icons.check_rounded,
-              _busy ? null : () => _acceptStop(stop),
-            ),
-            _Secondary('No estoy de acuerdo', Icons.flag_outlined,
-                _busy ? null : _disputeStop),
-          ];
-        case AppConstants.statusDisputed:
-          return [_Note('ServiTec está revisando el caso y definirá el monto final.')];
-        case AppConstants.statusCompleted:
-        case AppConstants.statusPaymentPending:
-          return [
-            _Primary('Pagar $approved', Icons.payment_rounded,
-                () => context.push('/payment/${s.id}'),
-                color: AppTheme.successColor),
-          ];
-      }
-      return const [];
+    switch (s.estado) {
+      case AppConstants.statusQuoteSent:
+      case AppConstants.statusRevisionSent:
+        final pending = s.cotizacionPendienteId;
+        return [
+          _Note(s.estado == AppConstants.statusRevisionSent
+              ? 'El técnico encontró algo adicional y envió una cotización revisada. Tu aprobación es necesaria para continuar.'
+              : s.visitPaid > 0
+                  ? 'El técnico envió la cotización de la reparación. Se te descontará la visita ya pagada (${CurrencyFormatter.format(s.visitPaid)}).'
+                  : 'El técnico envió su cotización. Revísala para aprobarla o rechazarla.'),
+          if (pending != null)
+            _Primary('Revisar cotización', Icons.receipt_long_outlined,
+                () => context.push('/quotation/review/$pending')),
+          if (s.isDiagnostic && s.estado == AppConstants.statusQuoteSent)
+            _Secondary('No quiero la reparación', Icons.do_not_disturb_on_outlined,
+                _busy ? null : _closeDiagnosisOnly),
+        ];
+      case AppConstants.statusStopped:
+        final stop = s.detencion;
+        if (stop == null) return const [];
+        final due = stop.montoPropuesto - s.visitPaid;
+        return [
+          _Primary(
+            stop.montoPropuesto < 10
+                ? 'Aceptar cierre sin cobro'
+                : s.visitPaid > 0 && due < 10
+                    ? 'Aceptar (cubierto por la visita)'
+                    : 'Aceptar ${CurrencyFormatter.format(stop.montoPropuesto)}',
+            Icons.check_rounded,
+            _busy ? null : () => _acceptStop(stop),
+          ),
+          _Secondary('No estoy de acuerdo', Icons.flag_outlined,
+              _busy ? null : _disputeStop),
+        ];
+      case AppConstants.statusDisputed:
+        return [_Note('ServiTec está revisando el caso y definirá el monto final.')];
+      case AppConstants.statusCompleted:
+      case AppConstants.statusPaymentPending:
+        return [
+          if (s.visitPaid > 0)
+            _Note('Total ${CurrencyFormatter.format(s.costoFinal ?? 0)} menos la visita ya pagada '
+                '(${CurrencyFormatter.format(s.visitPaid)}).'),
+          _Primary('Pagar ${CurrencyFormatter.format(s.amountDue)}', Icons.payment_rounded,
+              () => context.push('/payment/${s.id}'),
+              color: AppTheme.successColor),
+        ];
     }
+    return const [];
+  }
 
-    if (widget.isAdmin && s.estado == AppConstants.statusDisputed && s.detencion != null) {
+  List<Widget> _adminActions() {
+    if (s.estado == AppConstants.statusDisputed && s.detencion != null) {
       return [
         _Primary('Resolver disputa', Icons.gavel_rounded,
             _busy ? null : () => _resolveDispute(s.detencion!)),
+      ];
+    }
+    if (s.estado == AppConstants.statusNoShowReported) {
+      return [
+        _Primary('Resolver reporte de no llegada', Icons.gavel_rounded,
+            _busy ? null : _resolveNoShow),
       ];
     }
     return const [];
@@ -690,6 +1005,165 @@ class _Danger extends StatelessWidget {
       label: Text(label,
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
       style: TextButton.styleFrom(foregroundColor: AppTheme.errorColor),
+    );
+  }
+}
+
+/// The diagnostic visit: appointment, fee, payment status, and — while the
+/// cliente is deciding — the rules they agree to by confirming.
+class _VisitCard extends StatelessWidget {
+  final ServiceModel service;
+  final bool forClient;
+
+  const _VisitCard({required this.service, required this.forClient});
+
+  String _pago(String estado, double precio, double? cobrado) => switch (estado) {
+        'retenido' => 'Retenido en la tarjeta: ${CurrencyFormatter.format(precio)} (se cobra cuando el técnico sale)',
+        'reautorizacion_pendiente' => 'Pendiente de volver a autorizar',
+        'cobrado' => 'Cobrado: ${CurrencyFormatter.format(cobrado ?? precio)}',
+        'liberado' => 'Retención liberada, sin cobro',
+        'reembolsado' => 'Reembolsado',
+        _ => 'Sin autorizar',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final v = service.visita!;
+    final text = GoogleFonts.plusJakartaSans(fontSize: 13, height: 1.5, color: AppTheme.textSecondary);
+    final strong = GoogleFonts.plusJakartaSans(
+        fontSize: 14, fontWeight: FontWeight.w700, color: AppTheme.textPrimary);
+    final proposing = service.estado == AppConstants.statusVisitProposed;
+    final precio = CurrencyFormatter.format(v.precio);
+
+    return _Card(
+      title: 'Visita de diagnóstico',
+      icon: Icons.home_repair_service_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            v.fecha == null
+                ? 'Horario por definir'
+                : DateFormat("EEEE d 'de' MMMM, HH:mm", 'es').format(v.fecha!),
+            style: strong,
+          ),
+          const SizedBox(height: 4),
+          Text('Costo de la visita: $precio', style: text),
+          Text(_pago(v.pagoEstado, v.precio, v.montoCobrado), style: text),
+          if (forClient && proposing) ...[
+            const SizedBox(height: 10),
+            Text('Antes de confirmar', style: strong),
+            const SizedBox(height: 4),
+            for (final rule in [
+              'Se retienen $precio en tu tarjeta (solo tarjeta de crédito o débito) y se cobran cuando el técnico sale hacia tu domicilio.',
+              'Si apruebas la reparación, la visita se descuenta del total.',
+              'La visita es el monto mínimo del servicio: si la reparación cuesta menos, no hay reembolso de la diferencia.',
+              'Puedes cancelar sin costo hasta que el técnico salga. Después, la visita ya no es reembolsable.',
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('•  ', style: text),
+                    Expanded(child: Text(rule, style: text)),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// "Cancelar servicio" for the cliente or an admin, in both flows. The
+/// dialog says what cancelling will cost at this moment; the server
+/// (visitAction 'cancelar') decides and moves the money.
+class CancelServiceButton extends StatefulWidget {
+  final ServiceModel service;
+
+  const CancelServiceButton({super.key, required this.service});
+
+  @override
+  State<CancelServiceButton> createState() => _CancelServiceButtonState();
+}
+
+class _CancelServiceButtonState extends State<CancelServiceButton> {
+  bool _busy = false;
+
+  String get _consequence {
+    final s = widget.service;
+    final v = s.visita;
+    if (s.isDiagnostic && (v?.isCharged ?? false)) {
+      return 'El técnico ya salió hacia tu domicilio, así que la visita '
+          '(${CurrencyFormatter.format(v!.montoCobrado ?? v.precio)}) no es reembolsable. '
+          'El servicio se cerrará sin cobros adicionales.';
+    }
+    if (s.isDiagnostic && ((v?.isHeld ?? false) || (v?.needsReauthorization ?? false))) {
+      return 'Se liberará el monto retenido en tu tarjeta. No se te cobrará nada.';
+    }
+    return 'No se realizará ningún cobro.';
+  }
+
+  Future<void> _cancel() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLarge)),
+        title: Text('Cancelar servicio',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+        content: Text(_consequence,
+            style: GoogleFonts.plusJakartaSans(color: AppTheme.textSecondary, height: 1.5)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
+            child: const Text('Sí, cancelar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await context.read<ServiceFlowRepository>().visitAction(widget.service.id, 'cancelar');
+      await AnalyticsService.logServiceCancelled(servicioId: widget.service.id);
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Servicio cancelado.'),
+        backgroundColor: AppTheme.successColor,
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(e is FlowException ? e.message : 'No se pudo cancelar: $e'),
+        backgroundColor: AppTheme.errorColor,
+      ));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _busy ? null : _cancel,
+          icon: const Icon(Icons.cancel_outlined, color: AppTheme.errorColor),
+          label: Text('Cancelar servicio',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.errorColor,
+            side: const BorderSide(color: AppTheme.errorColor),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMedium)),
+          ),
+        ),
+      ),
     );
   }
 }

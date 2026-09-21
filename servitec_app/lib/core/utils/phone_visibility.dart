@@ -15,6 +15,9 @@ class PhoneVisibility {
     switch (estado) {
       // Revealed once work has started — the same states firestore.rules
       // open the private contact document in.
+      case AppConstants.statusOnTheWay:
+      case AppConstants.statusDiagnosed:
+      case AppConstants.statusNoShowReported:
       case AppConstants.statusInProgress:
       case AppConstants.statusRevisionSent:
       case AppConstants.statusRevisionRejected:
@@ -26,6 +29,8 @@ class PhoneVisibility {
         return PhoneVisibilityLevel.revealed;
       // Masked while quoting: the client has engaged with a quotation, but
       // the técnico is not on site yet.
+      case AppConstants.statusVisitProposed:
+      case AppConstants.statusVisitConfirmed:
       case AppConstants.statusQuoteSent:
       case AppConstants.statusQuoteRejected:
       case AppConstants.statusQuoteApproved:

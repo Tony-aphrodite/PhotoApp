@@ -18,9 +18,21 @@ class ServiceStateMachine {
     AppConstants.statusQuoteApproved: [AppConstants.statusCancelled],
   };
 
-  /// States in which the cliente (or an admin) may still cancel.
-  static bool canCancel(String estado) =>
-      canTransition(estado, AppConstants.statusCancelled);
+  /// Whether the cliente (or an admin) may still cancel. Mirrors cancelar()
+  /// in functions/src/visit-flow.ts, which every cancellation goes through.
+  static bool canCancel(String estado, {bool diagnostic = false}) =>
+      diagnostic ? _diagnosticCancellable.contains(estado) : canTransition(estado, AppConstants.statusCancelled);
+
+  static const _diagnosticCancellable = {
+    AppConstants.statusPending,
+    AppConstants.statusAssigned,
+    AppConstants.statusVisitProposed,
+    AppConstants.statusVisitConfirmed,
+    AppConstants.statusOnTheWay,
+    AppConstants.statusDiagnosed,
+    AppConstants.statusQuoteSent,
+    AppConstants.statusQuoteRejected,
+  };
 
   static bool canTransition(String from, String to) {
     final allowed = _validTransitions[from];

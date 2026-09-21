@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'visit_info.dart';
 import 'work_stop.dart';
 import 'package:equatable/equatable.dart';
 
@@ -59,6 +60,17 @@ class ServiceModel extends Equatable {
   final WorkStop? detencion;
   final String? resolucionNota;
 
+  // Diagnostic-visit flow — written only by Cloud Functions.
+  /// 'estandar' or 'diagnostico'; null until the server sets it on creation.
+  final String? flujo;
+  final VisitInfo? visita;
+
+  /// How a service that ended paid was closed, e.g. 'solo_diagnostico'.
+  final String? cierre;
+
+  /// When a diagnostic service waiting on someone closes by itself.
+  final DateTime? autoCierreAt;
+
   const ServiceModel({
     required this.id,
     required this.clienteId,
@@ -92,7 +104,26 @@ class ServiceModel extends Equatable {
     this.cotizacionAprobadaId,
     this.detencion,
     this.resolucionNota,
+    this.flujo,
+    this.visita,
+    this.cierre,
+    this.autoCierreAt,
   });
+
+  bool get isDiagnostic => flujo == 'diagnostico';
+
+  /// Visit fee already charged, credited against the total (0 otherwise).
+  double get visitPaid =>
+      isDiagnostic && (visita?.isCharged ?? false) ? (visita!.montoCobrado ?? 0) : 0;
+
+  /// What the cliente still owes on completion. Mirrors remainingAfterVisit()
+  /// on the server, which is what actually decides the charge.
+  double get amountDue {
+    final total = costoFinal ?? estimacionCosto ?? 0;
+    if (visitPaid <= 0) return total;
+    final rest = total - visitPaid;
+    return rest >= 10 ? rest : 0;
+  }
 
   bool get isPending => estado == 'pendiente';
   bool get isAssigned => estado == 'asignado';
@@ -137,6 +168,10 @@ class ServiceModel extends Equatable {
       cotizacionAprobadaId: data['cotizacionAprobadaId'] as String?,
       detencion: WorkStop.fromMap(data['detencion']),
       resolucionNota: (data['resolucion'] as Map?)?['nota'] as String?,
+      flujo: data['flujo'] as String?,
+      visita: VisitInfo.fromMap(data['visita']),
+      cierre: data['cierre'] as String?,
+      autoCierreAt: ((data['autoCierre'] as Map?)?['at'] as Timestamp?)?.toDate(),
     );
   }
 

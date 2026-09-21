@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/repositories/category_repository.dart';
 
@@ -117,7 +118,12 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    c.activo ? c.key : '${c.key}  ·  oculta',
+                    [
+                      c.key,
+                      if (c.isDiagnostic)
+                        'diagnóstico ${CurrencyFormatter.format(c.precioDiagnostico)}',
+                      if (!c.activo) 'oculta',
+                    ].join('  ·  '),
                     style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppTheme.textTertiary),
                   ),
                   trailing: Row(
@@ -157,6 +163,9 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   late final TextEditingController _key;
   late final TextEditingController _label;
   late final TextEditingController _icon;
+  late final TextEditingController _precio;
+  late bool _diagnostico;
+  String? _precioError;
 
   @override
   void initState() {
@@ -164,6 +173,9 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     _key = TextEditingController(text: widget.existing?.key ?? '');
     _label = TextEditingController(text: widget.existing?.label ?? '');
     _icon = TextEditingController(text: widget.existing?.icon ?? '📋');
+    _diagnostico = widget.existing?.flujo == CategoryModel.flujoDiagnostico;
+    final p = widget.existing?.precioDiagnostico ?? 0;
+    _precio = TextEditingController(text: p > 0 ? p.toStringAsFixed(0) : '');
   }
 
   @override
@@ -171,6 +183,7 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     _key.dispose();
     _label.dispose();
     _icon.dispose();
+    _precio.dispose();
     super.dispose();
   }
 
@@ -194,11 +207,21 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     // The key is fixed once created — services already point at it.
     final key = widget.existing?.key ?? _slug(_key.text.isEmpty ? label : _key.text);
     if (label.isEmpty || key.isEmpty) return;
+    final precio = double.tryParse(_precio.text.trim()) ?? 0;
+    if (_diagnostico && precio < 10) {
+      setState(() => _precioError = 'Indica el precio de la visita (mínimo \$10)');
+      return;
+    }
     Navigator.pop(
       context,
       (widget.existing ??
               CategoryModel(key: key, label: label, icon: icon, orden: 999))
-          .copyWith(label: label, icon: icon.isEmpty ? '📋' : icon),
+          .copyWith(
+        label: label,
+        icon: icon.isEmpty ? '📋' : icon,
+        flujo: _diagnostico ? CategoryModel.flujoDiagnostico : CategoryModel.flujoEstandar,
+        precioDiagnostico: _diagnostico ? precio : 0,
+      ),
     );
   }
 
@@ -209,7 +232,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLarge)),
       title: Text(isNew ? 'Nueva categoría' : 'Editar categoría',
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
-      content: Column(
+      content: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
@@ -239,7 +263,32 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                     style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textTertiary)),
               ),
             ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _diagnostico,
+            onChanged: (v) => setState(() => _diagnostico = v),
+            title: Text('Requiere visita de diagnóstico',
+                style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600)),
+            subtitle: Text(
+              'El cliente paga la visita antes de que el técnico vaya; se descuenta si aprueba la reparación. '
+              'Aplica a solicitudes nuevas.',
+              style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.textSecondary),
+            ),
+          ),
+          if (_diagnostico)
+            TextField(
+              controller: _precio,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Precio de la visita (MXN, IVA incluido)',
+                prefixText: '\$ ',
+                errorText: _precioError,
+              ),
+              onChanged: (_) => setState(() => _precioError = null),
+            ),
         ],
+      ),
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),

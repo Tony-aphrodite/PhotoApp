@@ -164,6 +164,29 @@ Open the service chat as either party. Try sending each of these:
 
 ---
 
+## Test 8f — Diagnostic visit (Phase 2, dev project only)
+
+Setup: Admin → Herramientas → Categorías → edit a category (e.g. Aire acondicionado) → turn on **Requiere visita de diagnóstico**, price $400. The técnico must have Stripe connected (Test 2) or they will not be offered the job.
+
+1. Cliente creates a request in that category → the form shows the diagnostic notice. Técnico gets it as `Asignado` with **Proponer horario de visita**.
+2. Técnico proposes a time **within the next 2 hours** (so "Voy en camino" unlocks during the test). Cliente sees the visit card with the four rules → **Confirmar y autorizar $400** → Stripe sheet → card `4242…`.
+   - **Expected**: `Visita confirmada`; Stripe dashboard shows a $400 PaymentIntent **uncaptured** (held).
+3. Técnico **Voy en camino** → confirm. **Expected**: `Técnico en camino`; the PaymentIntent is now **captured**; chat says it is no longer refundable.
+4. Técnico **Enviar cotización de reparación** → total $1,500. Cliente sees "se te descontará la visita"; approves.
+5. Técnico **Iniciar trabajo** → **Marcar como terminado**. Cliente sees **Pagar $1,100** with "Total $1,500 menos la visita ya pagada ($400)". Pays.
+   - **Expected**: two transactions in Stripe ($400 and $1,100), each with 12% application fee ($48 + $132).
+
+Variants worth one run each:
+- **Repair below the visit** ($300 in step 4): after "Marcar como terminado" the service goes straight to `Pagado`; no second charge.
+- **Cliente rejects the repair**: tap **No quiero la reparación** → `Pagado`, only $400 charged.
+- **Cancel before travel** (after step 2): Cancelar servicio → hold released in Stripe, nothing charged.
+- **Cancel after travel** (after step 3): dialog warns it is non-refundable → `Pagado` with $400 kept.
+- **Técnico withdraws** after step 3: **Cancelar mi asignación** → $400 refunded, service back to `Pendiente` for the admin to reassign; Admin → Técnicos shows "Canceló: 1".
+- **No-show**: after step 3 and 30 minutes past the appointment, cliente **El técnico no llegó** → admin **Resolver reporte** → refund and reassign, or reject.
+- **Auto-close**: leave a service in `Diagnóstico realizado`; the card shows the auto-close date (7 days). Reminders at 48h/24h come from the hourly cron.
+
+---
+
 ## Test 9 — Payment + CFDI
 
 1. On Cliente device, service should show a **"Pagar"** button now.

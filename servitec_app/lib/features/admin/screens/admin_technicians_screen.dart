@@ -288,6 +288,27 @@ class AdminTechniciansScreen extends StatelessWidget {
                                     padding: const EdgeInsets.only(top: 4),
                                     child: UnverifiedEmailBadge(uid: tech.uid),
                                   ),
+                                  // Incident record (no-shows, withdrawals,
+                                  // stopped jobs), counted server-side.
+                                  if (tech.incidencias.values.any((n) => n > 0))
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        [
+                                          if ((tech.incidencias['noSePresento'] ?? 0) > 0)
+                                            'No llegó: ${tech.incidencias['noSePresento']}',
+                                          if ((tech.incidencias['cancelaciones'] ?? 0) > 0)
+                                            'Canceló: ${tech.incidencias['cancelaciones']}',
+                                          if ((tech.incidencias['detenidos'] ?? 0) > 0)
+                                            'Detuvo: ${tech.incidencias['detenidos']}',
+                                        ].join(' · '),
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.warningColor,
+                                        ),
+                                      ),
+                                    ),
                                   const SizedBox(height: 6),
                                   // Rating stars + services
                                   Row(

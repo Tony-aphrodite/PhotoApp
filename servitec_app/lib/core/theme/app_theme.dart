@@ -50,6 +50,11 @@ class AppTheme {
     'revision_rechazada': Color(0xFFFF6D00),
     'detenido': Color(0xFFFF1744),
     'en_disputa': Color(0xFFD50000),
+    'visita_propuesta': Color(0xFF00B8D4),
+    'visita_confirmada': Color(0xFF2979FF),
+    'en_camino': Color(0xFF7C4DFF),
+    'diagnostico_realizado': Color(0xFF7C4DFF),
+    'reporte_no_llego': Color(0xFFD50000),
   };
 
   // Premium Gradients

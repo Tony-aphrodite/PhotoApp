@@ -2,6 +2,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -30,6 +32,11 @@ import 'routes/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Dates in Spanish everywhere (DateFormat defaults to English otherwise:
+  // "Mon 12 Aug" instead of "lun 12 ago").
+  await initializeDateFormatting('es');
+  Intl.defaultLocale = 'es';
 
   // Initialize Firebase
   await Firebase.initializeApp(

@@ -56,6 +56,9 @@ class CategoryCatalog {
   static String label(String key) => _byKey[key]?.label ?? key;
   static String icon(String key) => _byKey[key]?.icon ?? '';
 
+  /// The category, for flow details (diagnostic visit and its fee).
+  static CategoryModel? byKey(String key) => _byKey[key];
+
   /// "⚡ Electricidad" — the form most screens render.
   static String display(String key) {
     final c = _byKey[key];

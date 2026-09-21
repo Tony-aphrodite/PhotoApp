@@ -69,9 +69,18 @@ class AppConstants {
   static const String statusStopped = 'detenido';
   static const String statusDisputed = 'en_disputa';
 
+  // Diagnostic-visit flow (functions/src/lib/visit-rules.ts).
+  static const String statusVisitProposed = 'visita_propuesta';
+  static const String statusVisitConfirmed = 'visita_confirmada';
+  static const String statusOnTheWay = 'en_camino';
+  static const String statusDiagnosed = 'diagnostico_realizado';
+  static const String statusNoShowReported = 'reporte_no_llego';
+
   /// Assigned, but work has not started: quoting and approval.
   static const List<String> preWorkStates = [
     statusAssigned,
+    statusVisitProposed,
+    statusVisitConfirmed,
     statusQuoteSent,
     statusQuoteRejected,
     statusQuoteApproved,
@@ -79,6 +88,9 @@ class AppConstants {
 
   /// Work under way, including a pending revision or a stop being settled.
   static const List<String> workStates = [
+    statusOnTheWay,
+    statusDiagnosed,
+    statusNoShowReported,
     statusInProgress,
     statusRevisionSent,
     statusRevisionRejected,

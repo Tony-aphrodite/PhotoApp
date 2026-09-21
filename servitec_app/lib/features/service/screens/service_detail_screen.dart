@@ -565,125 +565,13 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
                           ],
                         ),
 
-                      // Cancelling is possible until work starts; after that
-                      // the flow ends through completion or a stop.
+                      // Cancelling goes through the server in both flows: in
+                      // the diagnostic one it may release a card hold or, once
+                      // the técnico left, close the service as paid.
                       if ((isClient || isAdmin) &&
-                          ServiceStateMachine.canCancel(service.estado))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                showDialog(
-                                  context: context,
-                                  builder: (ctx) => AlertDialog(
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(
-                                          AppTheme.radiusLarge),
-                                    ),
-                                    title: Text(
-                                      'Cancelar Servicio',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    content: Text(
-                                      'Esta seguro de cancelar este servicio?',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        color: AppTheme.textSecondary,
-                                      ),
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(ctx),
-                                        child: Text(
-                                          'No',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      ElevatedButton(
-                                        // Was fire-and-forget: the future was
-                                        // never awaited and the dialog closed
-                                        // immediately, so a rejected write (or
-                                        // an invalid transition) disappeared
-                                        // silently and the button looked dead.
-                                        onPressed: () async {
-                                          final messenger =
-                                              ScaffoldMessenger.of(context);
-                                          Navigator.pop(ctx);
-                                          try {
-                                            await context
-                                                .read<ServiceRepository>()
-                                                .updateServiceStatus(
-                                                  service.id,
-                                                  AppConstants.statusCancelled,
-                                                );
-                                            messenger.showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                    'Servicio cancelado.'),
-                                                backgroundColor:
-                                                    AppTheme.successColor,
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            messenger.showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                    'No se pudo cancelar: $e'),
-                                                backgroundColor:
-                                                    AppTheme.errorColor,
-                                              ),
-                                            );
-                                          }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor:
-                                              AppTheme.errorColor,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    AppTheme.radiusMedium),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Si, cancelar',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                              icon: const Icon(Icons.cancel_outlined,
-                                  color: AppTheme.errorColor),
-                              label: Text(
-                                'Cancelar Servicio',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppTheme.errorColor,
-                                side: const BorderSide(
-                                    color: AppTheme.errorColor),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                      AppTheme.radiusMedium),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                          ServiceStateMachine.canCancel(service.estado,
+                              diagnostic: service.isDiagnostic))
+                        CancelServiceButton(service: service),
 
                       const SizedBox(height: 32),
                     ],

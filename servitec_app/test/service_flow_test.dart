@@ -2,6 +2,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:servitec_app/core/constants/app_constants.dart';
 import 'package:servitec_app/core/utils/phone_visibility.dart';
 import 'package:servitec_app/core/utils/service_state_machine.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:servitec_app/data/models/service_model.dart';
+import 'package:servitec_app/data/models/visit_info.dart';
 import 'package:servitec_app/data/models/work_stop.dart';
 
 void main() {
@@ -61,6 +64,51 @@ void main() {
       ]) {
         expect(ServiceStateMachine.canCancel(s), isFalse, reason: s);
       }
+    });
+  });
+
+  group('diagnostic flow', () {
+    test('cancellable until the repair is approved, via the server', () {
+      for (final s in [
+        AppConstants.statusVisitProposed,
+        AppConstants.statusVisitConfirmed,
+        AppConstants.statusOnTheWay,
+        AppConstants.statusDiagnosed,
+        AppConstants.statusQuoteSent,
+      ]) {
+        expect(ServiceStateMachine.canCancel(s, diagnostic: true), isTrue, reason: s);
+      }
+      for (final s in [
+        AppConstants.statusQuoteApproved,
+        AppConstants.statusInProgress,
+        AppConstants.statusNoShowReported,
+        AppConstants.statusPaid,
+      ]) {
+        expect(ServiceStateMachine.canCancel(s, diagnostic: true), isFalse, reason: s);
+      }
+    });
+
+    test('visit states sit in the right stages', () {
+      expect(AppConstants.preWorkStates, contains(AppConstants.statusVisitConfirmed));
+      expect(AppConstants.workStates, contains(AppConstants.statusOnTheWay));
+      expect(PhoneVisibility.resolve(AppConstants.statusVisitProposed), PhoneVisibilityLevel.masked);
+      expect(PhoneVisibility.resolve(AppConstants.statusOnTheWay), PhoneVisibilityLevel.revealed);
+    });
+
+    test('amount due credits the visit and treats it as the minimum', () {
+      ServiceModel svc(double total, {bool charged = true}) => ServiceModel(
+            id: 's', clienteId: 'c', clienteNombre: '', clienteTelefono: '',
+            titulo: '', descripcion: '', categoria: 'plomeria', urgencia: 'normal',
+            ubicacion: const GeoPoint(0, 0), ubicacionTexto: '', fotos: const [],
+            estado: AppConstants.statusCompleted, tipoAsignacion: 'automatica',
+            createdAt: DateTime(2026), updatedAt: DateTime(2026),
+            costoFinal: total, flujo: 'diagnostico',
+            visita: VisitInfo(precio: 400, montoCobrado: 400,
+                pagoEstado: charged ? 'cobrado' : 'retenido'),
+          );
+      expect(svc(1500).amountDue, 1100);
+      expect(svc(300).amountDue, 0);
+      expect(svc(1500, charged: false).amountDue, 1500, reason: 'nothing credited until charged');
     });
   });
 

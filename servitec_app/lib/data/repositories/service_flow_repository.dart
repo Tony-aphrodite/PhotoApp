@@ -123,6 +123,15 @@ class ServiceFlowRepository {
         if (comentario != null) 'comentario': comentario,
       });
 
+  /// A step of the diagnostic-visit flow — or any cancellation, in either
+  /// flow (see functions/src/visit-flow.ts for the list of `accion` values).
+  Future<Map<String, dynamic>> visitAction(
+    String servicioId,
+    String accion, [
+    Map<String, dynamic> extra = const {},
+  ]) =>
+      _call('visitAction', {'servicioId': servicioId, 'accion': accion, ...extra});
+
   Future<void> resolveDispute({
     required String servicioId,
     required double monto,

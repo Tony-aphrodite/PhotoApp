@@ -23,6 +23,11 @@ class StatusBadge extends StatelessWidget {
     'revision_rechazada': 'Revisión rechazada',
     'detenido': 'Trabajo detenido',
     'en_disputa': 'En revisión ServiTec',
+    'visita_propuesta': 'Visita propuesta',
+    'visita_confirmada': 'Visita confirmada',
+    'en_camino': 'Técnico en camino',
+    'diagnostico_realizado': 'Diagnóstico realizado',
+    'reporte_no_llego': 'Reporte en revisión',
   };
 
   @override

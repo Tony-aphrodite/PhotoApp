@@ -12,6 +12,10 @@ class UserModel extends Equatable {
   final String rol;
   final String? fotoPerfil;
   final bool activo;
+
+  /// Técnico incident counters, written only by the server:
+  /// noSePresento, cancelaciones, detenidos.
+  final Map<String, int> incidencias;
   final DateTime createdAt;
   final GeoPoint? ubicacionDefecto;
 
@@ -52,6 +56,7 @@ class UserModel extends Equatable {
     required this.rol,
     this.fotoPerfil,
     this.activo = true,
+    this.incidencias = const {},
     required this.createdAt,
     this.ubicacionDefecto,
     this.especialidades,
@@ -90,6 +95,10 @@ class UserModel extends Equatable {
       rol: data['rol'] ?? 'cliente',
       fotoPerfil: data['fotoPerfil'],
       activo: data['activo'] ?? true,
+      incidencias: {
+        for (final e in ((data['incidencias'] as Map?) ?? const {}).entries)
+          '${e.key}': (e.value as num?)?.toInt() ?? 0,
+      },
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       ubicacionDefecto: data['ubicacionDefecto'] as GeoPoint?,
       especialidades: data['especialidades'] != null
