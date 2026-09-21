@@ -7,8 +7,21 @@
 #
 # Run it: repo → Actions → "Deploy Cloud Functions" → Run workflow.
 #
+# Two targets (input "target"):
+#   servitec-dev             development/testing project — the default, and
+#                            where unreleased flows go first. Functions,
+#                            Firestore rules + indexes and Storage rules are
+#                            all deployed together, so dev never drifts.
+#   servicios-domicilio-mvp  production, which the user test runs on. Functions
+#                            only (rules stay a manual console step there), and
+#                            only when "confirm_production" is typed as
+#                            PRODUCCION. While the user test is running, deploy
+#                            production from the user-test-1 branch, never main.
+#
 # Required repository secrets (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT      full JSON of a service account key
+#   FIREBASE_SERVICE_ACCOUNT      service account key JSON for production
+#   FIREBASE_SERVICE_ACCOUNT_DEV  service account key JSON for servitec-dev
+#   STRIPE_WEBHOOK_SECRET_DEV     whsec_... of the webhook pointing at dev
 #   STRIPE_SECRET_KEY             sk_test_... / sk_live_...
 #   STRIPE_WEBHOOK_SECRET         whsec_... (leave empty on the first run)
 #   STRIPE_PLATFORM_ACCOUNT_ID    acct_...
@@ -28,6 +41,17 @@ name: Deploy Cloud Functions
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Firebase project to deploy to'
+        type: choice
+        options:
+          - servitec-dev
+          - servicios-domicilio-mvp
+        default: servitec-dev
+      confirm_production:
+        description: 'Only for production: type PRODUCCION to confirm'
+        required: false
+        default: ''
       only:
         description: 'Limit the deploy, e.g. functions:onPaymentSucceededStripeWebhook. Leave as "functions" to deploy all.'
         required: false
@@ -37,8 +61,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      TARGET: ${{ inputs.target }}
+      IS_DEV: ${{ inputs.target == 'servitec-dev' }}
 
     steps:
+      - name: Guard production deploys
+        # A slip of the dropdown must not ship unreleased flows to the server
+        # real users are on.
+        if: inputs.target == 'servicios-domicilio-mvp'
+        run: |
+          if [ "${{ inputs.confirm_production }}" != "PRODUCCION" ]; then
+            echo "::error::Deploying to production requires typing PRODUCCION in confirm_production."
+            exit 1
+          fi
+          echo "Deploying ${GITHUB_REF_NAME} to PRODUCTION."
+
       - name: Check out the repository
         uses: actions/checkout@v4
 
@@ -64,7 +102,7 @@ jobs:
         run: |
           cat > functions/.env <<EOF
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_WEBHOOK_SECRET=${{ inputs.target == 'servitec-dev' && secrets.STRIPE_WEBHOOK_SECRET_DEV || secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_PLATFORM_ACCOUNT_ID=${{ secrets.STRIPE_PLATFORM_ACCOUNT_ID }}
           FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
           FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
@@ -87,7 +125,11 @@ jobs:
 
       - name: Authenticate to Google Cloud
         run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/gcp-key.json"
+          echo '${{ inputs.target == 'servitec-dev' && secrets.FIREBASE_SERVICE_ACCOUNT_DEV || secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/gcp-key.json"
+          if ! grep -q '"type": *"service_account"' "$RUNNER_TEMP/gcp-key.json"; then
+            echo "::error::No service account key for $TARGET. Add the FIREBASE_SERVICE_ACCOUNT(_DEV) secret."
+            exit 1
+          fi
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/gcp-key.json" >> "$GITHUB_ENV"
 
       - name: Deploy
@@ -95,11 +137,21 @@ jobs:
         # (sendAdvancedNotification, generateMonthlyReport, cleanupExpiredServices)
         # that the old servitec_app/functions codebase left behind. There is no
         # prompt to answer on a runner.
+        #
+        # On dev, a plain "functions" deploy also ships Firestore rules and
+        # indexes and Storage rules, so the dev project always matches the
+        # branch being tested. --force there may delete indexes not declared
+        # in firestore.indexes.json, which is the point on a dev project.
         run: |
           set -o pipefail
+          ONLY="${{ inputs.only }}"
+          if [ "$IS_DEV" = "true" ] && [ "$ONLY" = "functions" ]; then
+            ONLY="functions,firestore,storage"
+          fi
+          echo "Deploying --only $ONLY to $TARGET"
           npx firebase-tools@15 deploy \
-            --only "${{ inputs.only }}" \
-            --project servicios-domicilio-mvp \
+            --only "$ONLY" \
+            --project "$TARGET" \
             --non-interactive \
             --force 2>&1 | tee deploy.log
 
@@ -146,10 +198,10 @@ jobs:
         if: success()
         run: |
           npx firebase-tools@15 functions:list \
-            --project servicios-domicilio-mvp || true
+            --project "$TARGET" || true
           echo "----------------------------------------------------------------"
           echo "Stripe webhook endpoint to register in the Stripe dashboard:"
-          echo "https://us-central1-servicios-domicilio-mvp.cloudfunctions.net/onPaymentSucceededStripeWebhook"
+          echo "https://us-central1-$TARGET.cloudfunctions.net/onPaymentSucceededStripeWebhook"
 
       - name: Remove credentials
         if: always()

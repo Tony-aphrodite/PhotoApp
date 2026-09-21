@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
@@ -8,9 +9,10 @@ import '../../core/constants/app_constants.dart';
 class PaymentRepository {
   final FirebaseFirestore _firestore;
 
-  // Cloud Function URL - update after deploying
-  static const String _cloudFunctionBaseUrl =
-      'https://us-central1-servicios-domicilio-mvp.cloudfunctions.net';
+  // Derived from the Firebase project the app was built against, so a dev
+  // build calls servitec-dev's functions and a prod build calls prod's.
+  static String get _cloudFunctionBaseUrl =>
+      'https://us-central1-${Firebase.app().options.projectId}.cloudfunctions.net';
 
   PaymentRepository({FirebaseFirestore? firestore})
       : _firestore = firestore ?? FirebaseFirestore.instance;

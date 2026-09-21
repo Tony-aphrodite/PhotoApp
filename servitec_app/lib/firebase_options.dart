@@ -1,12 +1,17 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/services.dart' show appFlavor;
+
+/// Whether this build talks to the servitec-dev project instead of prod.
+/// Set by the Android flavor: `flutter build apk --flavor dev`.
+bool get isDevBuild => appFlavor == 'dev';
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return android;
+        return isDevBuild ? androidDev : android;
       case TargetPlatform.iOS:
         return ios;
       default:
@@ -23,6 +28,18 @@ class DefaultFirebaseOptions {
     projectId: 'servicios-domicilio-mvp',
     storageBucket: 'servicios-domicilio-mvp.firebasestorage.app',
     authDomain: 'servicios-domicilio-mvp.firebaseapp.com',
+  );
+
+  /// servitec-dev. Values come from that project's google-services.json
+  /// (android/app/src/dev/google-services.json): apiKey = api_key.current_key,
+  /// appId = client.client_info.mobilesdk_app_id for the .dev package,
+  /// messagingSenderId = project_info.project_number.
+  static const FirebaseOptions androidDev = FirebaseOptions(
+    apiKey: 'PENDIENTE_DEV_API_KEY',
+    appId: 'PENDIENTE_DEV_APP_ID',
+    messagingSenderId: 'PENDIENTE_DEV_SENDER_ID',
+    projectId: 'servitec-dev',
+    storageBucket: 'servitec-dev.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(

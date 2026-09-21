@@ -35,6 +35,29 @@ android {
         versionName = flutter.versionName
     }
 
+    // Two backends, one codebase:
+    //   prod → servicios-domicilio-mvp, the project real users and the
+    //          user test run on. Build: flutter build apk --flavor prod
+    //   dev  → servitec-dev, where unreleased flows are tested without
+    //          touching prod. Build: flutter build apk --flavor dev
+    // Each flavor reads its own src/<flavor>/google-services.json, and the
+    // Dart side picks matching FirebaseOptions from `appFlavor` (see
+    // firebase_options.dart). The dev app has its own package name so both
+    // can be installed on one phone.
+    flavorDimensions += "env"
+    productFlavors {
+        create("prod") {
+            dimension = "env"
+            resValue("string", "app_name", "servitec_app")
+        }
+        create("dev") {
+            dimension = "env"
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            resValue("string", "app_name", "ServiTec DEV")
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
