@@ -8,7 +8,7 @@
 # Run it: repo → Actions → "Deploy Cloud Functions" → Run workflow.
 #
 # Two targets (input "target"):
-#   servitec-dev             development/testing project — the default, and
+#   servitec-dev-586f6       development/testing project — the default, and
 #                            where unreleased flows go first. Functions,
 #                            Firestore rules + indexes and Storage rules are
 #                            all deployed together, so dev never drifts.
@@ -20,7 +20,7 @@
 #
 # Required repository secrets (Settings → Secrets and variables → Actions):
 #   FIREBASE_SERVICE_ACCOUNT      service account key JSON for production
-#   FIREBASE_SERVICE_ACCOUNT_DEV  service account key JSON for servitec-dev
+#   FIREBASE_SERVICE_ACCOUNT_DEV  service account key JSON for servitec-dev-586f6
 #   STRIPE_WEBHOOK_SECRET_DEV     whsec_... of the webhook pointing at dev
 #   STRIPE_SECRET_KEY             sk_test_... / sk_live_...
 #   STRIPE_WEBHOOK_SECRET         whsec_... (leave empty on the first run)
@@ -45,9 +45,9 @@ on:
         description: 'Firebase project to deploy to'
         type: choice
         options:
-          - servitec-dev
+          - servitec-dev-586f6
           - servicios-domicilio-mvp
-        default: servitec-dev
+        default: servitec-dev-586f6
       confirm_production:
         description: 'Only for production: type PRODUCCION to confirm'
         required: false
@@ -63,7 +63,7 @@ jobs:
     timeout-minutes: 30
     env:
       TARGET: ${{ inputs.target }}
-      IS_DEV: ${{ inputs.target == 'servitec-dev' }}
+      IS_DEV: ${{ inputs.target == 'servitec-dev-586f6' }}
 
     steps:
       - name: Guard production deploys
@@ -102,7 +102,7 @@ jobs:
         run: |
           cat > functions/.env <<EOF
           STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
-          STRIPE_WEBHOOK_SECRET=${{ inputs.target == 'servitec-dev' && secrets.STRIPE_WEBHOOK_SECRET_DEV || secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_WEBHOOK_SECRET=${{ inputs.target == 'servitec-dev-586f6' && secrets.STRIPE_WEBHOOK_SECRET_DEV || secrets.STRIPE_WEBHOOK_SECRET }}
           STRIPE_PLATFORM_ACCOUNT_ID=${{ secrets.STRIPE_PLATFORM_ACCOUNT_ID }}
           FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
           FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
@@ -125,7 +125,7 @@ jobs:
 
       - name: Authenticate to Google Cloud
         run: |
-          echo '${{ inputs.target == 'servitec-dev' && secrets.FIREBASE_SERVICE_ACCOUNT_DEV || secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/gcp-key.json"
+          echo '${{ inputs.target == 'servitec-dev-586f6' && secrets.FIREBASE_SERVICE_ACCOUNT_DEV || secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/gcp-key.json"
           if ! grep -q '"type": *"service_account"' "$RUNNER_TEMP/gcp-key.json"; then
             echo "::error::No service account key for $TARGET. Add the FIREBASE_SERVICE_ACCOUNT(_DEV) secret."
             exit 1

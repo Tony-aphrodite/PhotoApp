@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "913327030316",
+    "project_id": "servitec-dev-586f6",
+    "storage_bucket": "servitec-dev-586f6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:913327030316:android:33848040d2e1f8bcf59189",
+        "android_client_info": {
+          "package_name": "com.serviciosdomicilio.mvp.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvxHQsNIgOdagy1de41nXdQuEXk17swrI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

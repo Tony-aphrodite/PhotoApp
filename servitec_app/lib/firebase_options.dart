@@ -35,11 +35,11 @@ class DefaultFirebaseOptions {
   /// appId = client.client_info.mobilesdk_app_id for the .dev package,
   /// messagingSenderId = project_info.project_number.
   static const FirebaseOptions androidDev = FirebaseOptions(
-    apiKey: 'PENDIENTE_DEV_API_KEY',
-    appId: 'PENDIENTE_DEV_APP_ID',
-    messagingSenderId: 'PENDIENTE_DEV_SENDER_ID',
-    projectId: 'servitec-dev',
-    storageBucket: 'servitec-dev.firebasestorage.app',
+    apiKey: 'AIzaSyDvxHQsNIgOdagy1de41nXdQuEXk17swrI',
+    appId: '1:913327030316:android:33848040d2e1f8bcf59189',
+    messagingSenderId: '913327030316',
+    projectId: 'servitec-dev-586f6',
+    storageBucket: 'servitec-dev-586f6.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
