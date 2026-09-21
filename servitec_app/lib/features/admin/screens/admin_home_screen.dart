@@ -4,12 +4,16 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../survey/survey_widgets.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/service_repository.dart';
 import '../../auth/bloc/auth_bloc.dart';
 import '../../auth/bloc/auth_state.dart';
 import '../../../core/utils/category_catalog.dart';
+
+/// Menu value for the survey-link dialog, which is not a route.
+const _surveyAction = 'survey';
 
 class AdminHomeScreen extends StatefulWidget {
   const AdminHomeScreen({super.key});
@@ -74,7 +78,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 child: PopupMenuButton<String>(
                   icon: const Icon(Icons.grid_view_rounded, color: Colors.white),
                   tooltip: 'Herramientas',
-                  onSelected: (route) => context.push(route),
+                  onSelected: (route) => route == _surveyAction
+                      ? configureSurveyLink(context)
+                      : context.push(route),
                   itemBuilder: (_) => const [
                     PopupMenuItem(
                       value: '/admin/finance',
@@ -129,6 +135,14 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       child: ListTile(
                         leading: Icon(Icons.campaign_outlined),
                         title: Text('Notificaciones'),
+                        dense: true,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _surveyAction,
+                      child: ListTile(
+                        leading: Icon(Icons.rate_review_outlined),
+                        title: Text('Encuesta de prueba'),
                         dense: true,
                       ),
                     ),

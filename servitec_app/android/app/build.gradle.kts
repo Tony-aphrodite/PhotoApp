@@ -4,6 +4,9 @@ plugins {
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services")
+    // Uploads the mapping files that turn crash stack traces back into
+    // readable Dart/Kotlin frames on the Crashlytics dashboard.
+    id("com.google.firebase.crashlytics")
 }
 
 android {

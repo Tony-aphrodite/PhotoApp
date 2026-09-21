@@ -87,6 +87,15 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    // Public APK downloads for user testing, linked from the website. Anyone
+    // may read — that is the point of a download link — and nobody may write
+    // from a client: the file is replaced by hand in the Firebase console, so
+    // the fixed URL keeps working across versions.
+    match /descargas/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Anything not matched above is denied.
     match /{allPaths=**} {
       allow read, write: if false;
