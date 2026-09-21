@@ -12,7 +12,7 @@
  */
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { scan } from './lib/contact-info-filter';
 import { sendPushToUser } from './lib/push';
 
@@ -78,7 +78,7 @@ export const onChatMessageCreated = onDocumentCreated(
           // Review state, driven from the admin panel. No automatic sanction
           // is applied — the flag only records what happened.
           estado: 'pendiente',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
         });
         // Do NOT push a notification for a blocked message.
         return;

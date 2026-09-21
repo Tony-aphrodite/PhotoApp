@@ -25,7 +25,7 @@
  */
 
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue, GeoPoint } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 import { ACTIVE_WORK_STATES } from './lib/service-flow-rules';
 import { FLUJO, PAGO } from './lib/visit-rules';
@@ -154,7 +154,7 @@ export const onServiceCreated = onDocumentCreated(
         servicioId,
         categoria,
         estado: 'pendiente',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
       return;
     }
@@ -243,8 +243,8 @@ export const onServiceCreated = onDocumentCreated(
       tecnicoNombre: best.nombre,
       estado: 'asignado',
       tipoAsignacion: 'automatica',
-      asignadoAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      asignadoAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     // This single write does double duty: it renders the gray "Técnico
@@ -261,7 +261,7 @@ export const onServiceCreated = onDocumentCreated(
       nombreUsuario: 'ServiTec',
       mensaje: `Técnico asignado: ${best.nombre}`,
       tipo: 'sistema',
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(),
       leido: false,
       metadata: {
         event: 'technician_assigned',

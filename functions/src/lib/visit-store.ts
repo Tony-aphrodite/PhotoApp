@@ -8,13 +8,11 @@
  * Stripe here with an idempotency key, then commit in a second transaction.
  */
 
-import { db, admin } from './admin';
+import { db, admin, FieldValue, Timestamp } from './admin';
 import { stripe, applicationFeeCentavos } from './stripe';
 import { Data } from './flow-helpers';
 import { FLUJO, Schedule, ScheduleInput, planSchedule } from './visit-rules';
 
-const FieldValue = admin.firestore.FieldValue;
-const Timestamp = admin.firestore.Timestamp;
 
 // ---------------------------------------------------------------------------
 // Category config (flow type and visit fee), cached per function instance.

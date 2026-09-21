@@ -15,7 +15,7 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue, Timestamp } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 import {
   Data,
@@ -51,8 +51,6 @@ import {
   scheduleFor,
 } from './lib/visit-store';
 
-const FieldValue = admin.firestore.FieldValue;
-const Timestamp = admin.firestore.Timestamp;
 
 type Role = 'tecnico' | 'cliente' | 'admin';
 
@@ -657,26 +655,36 @@ async function runTask(ref: FirebaseFirestore.DocumentReference) {
   });
 }
 
+/**
+ * Runs every scheduled step that is due. The cron below only calls this, so
+ * it can also be exercised directly (emulator-tests/flows.test.js) — the
+ * Functions emulator cannot fire v2 scheduled functions.
+ */
+export async function runDueServiceTasks(limit = 200): Promise<{ due: number; failed: number }> {
+  // Single-field range on `revisionAt`: only services that are due are read.
+  const due = await db.collection('servicios')
+    .where('revisionAt', '<=', Timestamp.now())
+    .orderBy('revisionAt')
+    .limit(limit)
+    .get();
+  let failed = 0;
+  for (const doc of due.docs) {
+    try {
+      await runTask(doc.ref);
+    } catch (err) {
+      failed++;
+      // eslint-disable-next-line no-console
+      console.error(`schedule task failed for ${doc.id}`, err);
+    }
+  }
+  return { due: due.size, failed };
+}
+
 export const serviceScheduleCron = onSchedule(
   { schedule: 'every 60 minutes', region: 'us-central1', timeoutSeconds: 300 },
   async () => {
-    // Single-field range on `revisionAt`: only services that are due are read.
-    const due = await db.collection('servicios')
-      .where('revisionAt', '<=', Timestamp.now())
-      .orderBy('revisionAt')
-      .limit(200)
-      .get();
-    let failed = 0;
-    for (const doc of due.docs) {
-      try {
-        await runTask(doc.ref);
-      } catch (err) {
-        failed++;
-        // eslint-disable-next-line no-console
-        console.error(`schedule task failed for ${doc.id}`, err);
-      }
-    }
+    const { due, failed } = await runDueServiceTasks();
     // eslint-disable-next-line no-console
-    console.log(`Schedule: ${due.size} due, ${failed} failed.`);
+    console.log(`Schedule: ${due} due, ${failed} failed.`);
   },
 );

@@ -1,0 +1,14 @@
+{
+  "name": "servitec-emulator-tests",
+  "private": true,
+  "description": "Integration tests against the Firebase emulators (rules + Cloud Functions). Not deployed.",
+  "scripts": {
+    "test": "node run.js"
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "firebase": "^11.10.0",
+    "firebase-admin": "^12.7.0",
+    "stripe": "^17.7.0"
+  }
+}

@@ -16,7 +16,7 @@
  */
 
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 
 export const onReviewWritten = onDocumentWritten(
   {
@@ -48,7 +48,7 @@ export const onReviewWritten = onDocumentWritten(
     await db.collection('users').doc(tecnicoId).update({
       calificacionPromedio: promedio,
       totalResenas: total,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     // eslint-disable-next-line no-console

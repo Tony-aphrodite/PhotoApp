@@ -21,7 +21,18 @@ if (!secretKey) {
 /** Shared Stripe client. `apiVersion` is intentionally omitted so the SDK
  * uses the version it was built against (avoids a pinned-literal type error
  * whenever the stripe package is bumped). */
-export const stripe = new Stripe(secretKey || 'sk_test_unconfigured');
+export const stripe = new Stripe(
+  secretKey || 'sk_test_unconfigured',
+  // Emulator tests only: point the client at a local mock (see
+  // emulator-tests/stripe-mock.js). Never set in deployed environments.
+  process.env.STRIPE_API_HOST
+    ? {
+        host: process.env.STRIPE_API_HOST,
+        port: Number(process.env.STRIPE_API_PORT || 12111),
+        protocol: (process.env.STRIPE_API_PROTOCOL as 'http' | 'https') || 'http',
+      }
+    : undefined,
+);
 
 /** Percentage of the gross service price that ServiTec retains. */
 export const platformCommissionPct: number = (() => {

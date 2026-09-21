@@ -12,7 +12,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 import {
   Data,
@@ -159,7 +159,7 @@ export const respondQuotation = onCall<{ cotizacionId?: string; respuesta?: stri
       const next = stateAfterResponse(kind, aprobada);
       tx.update(s.ref, {
         estado: next,
-        cotizacionPendienteId: admin.firestore.FieldValue.delete(),
+        cotizacionPendienteId: FieldValue.delete(),
         ...(aprobada ? { costoFinal: cot.total, cotizacionAprobadaId: cotizacionId } : {}),
         ...scheduleFor(s.data, next),
         updatedAt: now(),
@@ -231,7 +231,7 @@ export const serviceWorkAction = onCall<{ servicioId?: string; accion?: string }
         // No payment will follow, so the webhook that normally counts a
         // completed job never fires; count it here.
         tx.update(db.collection('users').doc(uid), {
-          serviciosCompletados: admin.firestore.FieldValue.increment(1),
+          serviciosCompletados: FieldValue.increment(1),
         });
       }
       const mensaje = !close

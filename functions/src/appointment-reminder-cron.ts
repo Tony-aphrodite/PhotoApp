@@ -16,7 +16,7 @@
  */
 
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 
 /** Appointments in these states are still expected to happen. */
@@ -81,7 +81,7 @@ export const appointmentReminderCron = onSchedule(
       });
 
       await doc.ref.update({
-        recordatorioEnviadoAt: admin.firestore.FieldValue.serverTimestamp(),
+        recordatorioEnviadoAt: FieldValue.serverTimestamp(),
       });
       sent++;
     }

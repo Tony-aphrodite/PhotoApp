@@ -16,7 +16,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 
 type Audience = 'todos' | 'clientes' | 'tecnicos' | 'usuario';
@@ -85,7 +85,7 @@ export const sendAdminBroadcast = onCall<BroadcastInput>(
       body: body.trim(),
       recipientCount: recipients.length,
       sentBy: callerUid,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     return { ok: true, recipientCount: recipients.length };

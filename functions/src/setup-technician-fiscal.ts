@@ -18,7 +18,7 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue, Timestamp } from './lib/admin';
 import { facturapiParent } from './lib/facturapi';
 
 interface SetupTechnicianFiscalInput {
@@ -124,8 +124,8 @@ export const setupTechnicianFiscal = onCall<SetupTechnicianFiscalInput>(
       'facturapi': {
         organizationId: org.id,
         organizationApiKey: orgKey, // stored for CFDI stamping calls
-        csdUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-        csdExpiresAt: admin.firestore.Timestamp.fromDate(
+        csdUploadedAt: FieldValue.serverTimestamp(),
+        csdExpiresAt: Timestamp.fromDate(
           // Rough estimate — CSDs are valid ~4 years. Read actual expiry from
           // the FacturAPI response when the SDK exposes it and store that.
           new Date(Date.now() + 4 * 365 * 24 * 60 * 60 * 1000),

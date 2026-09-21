@@ -13,7 +13,7 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { releasePhoneClaimsOf } from './lib/phone-claims';
 
 async function requireAdmin(req: CallableRequest<unknown>): Promise<string> {
@@ -64,8 +64,8 @@ export const adminReleasePhone = onCall<{ uid?: string }>(
         telefonos: released,
         estado: 'revisada',
         revisadoPor: adminUid,
-        revisadoAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        revisadoAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     }
     return { released };

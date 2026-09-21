@@ -5,7 +5,7 @@
  */
 
 import { HttpsError, CallableRequest } from 'firebase-functions/v2/https';
-import { db, admin } from './admin';
+import { db, admin, FieldValue } from './admin';
 import { FlowError } from './service-flow-rules';
 
 export type Tx = FirebaseFirestore.Transaction;
@@ -13,7 +13,7 @@ export type Data = FirebaseFirestore.DocumentData;
 export type WriteTarget = Tx | FirebaseFirestore.WriteBatch;
 
 export const OPTS = { region: 'us-central1', memory: '256MiB' as const };
-export const now = () => admin.firestore.FieldValue.serverTimestamp();
+export const now = () => FieldValue.serverTimestamp();
 
 /** Signed in with a verified email; returns the uid. */
 export function requireVerified(req: CallableRequest<unknown>): string {

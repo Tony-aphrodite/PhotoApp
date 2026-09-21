@@ -8,7 +8,7 @@
  * stream the app already listens on.
  */
 
-import { db, admin } from './admin';
+import { db, admin, FieldValue } from './admin';
 
 export interface PushPayload {
   title: string;
@@ -64,7 +64,7 @@ export async function sendPushToUser(
       await db
         .collection('users')
         .doc(uid)
-        .update({ fcmToken: admin.firestore.FieldValue.delete() })
+        .update({ fcmToken: FieldValue.delete() })
         .catch(() => undefined);
     } else {
       // eslint-disable-next-line no-console

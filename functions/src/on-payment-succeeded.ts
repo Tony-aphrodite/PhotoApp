@@ -25,7 +25,7 @@
 
 import { onRequest } from 'firebase-functions/v2/https';
 import { visitPaidOf } from './lib/visit-rules';
-import { db, admin } from './lib/admin';
+import { db, admin, FieldValue } from './lib/admin';
 import { stripe } from './lib/stripe';
 import { facturapiForOrg } from './lib/facturapi';
 import { renderBrandedCfdiPdf } from './lib/pdf';
@@ -105,8 +105,8 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       stripePaymentIntentId: pi.id,
       concepto,
       estado: 'completado',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      completedAt: FieldValue.serverTimestamp(),
     }, { merge: true });
 
     if (concepto === 'visita') {
@@ -125,7 +125,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
           stripePaymentIntentId: pi.id,
           monto: totalMxn,
           estado: 'pendiente',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
         });
         batch.update(txRef, { cfdiEnCola: true });
         await batch.commit();
@@ -148,7 +148,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     // redelivered webhook does not double-count.
     if (!(await db.collection('transacciones').doc(pi.id).get()).data()?.contadoParaTecnico) {
       await db.collection('users').doc(tecnicoUid).update({
-        serviciosCompletados: admin.firestore.FieldValue.increment(1),
+        serviciosCompletados: FieldValue.increment(1),
       });
       await db.collection('transacciones').doc(pi.id).update({
         contadoParaTecnico: true,
@@ -167,7 +167,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
           nombreUsuario: 'ServiTec',
           mensaje: `Pago recibido — $${totalMxn.toFixed(2)} MXN. Comisión plataforma: $${platformFeeMxn.toFixed(2)} MXN.`,
           tipo: 'sistema',
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timestamp: FieldValue.serverTimestamp(),
           leido: false,
           metadata: {
             event: 'payment_received',
@@ -189,8 +189,8 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       montoTecnico: tecnicoNetMxn,
       estadoPago: 'pagado',
       stripePaymentIntentId: pi.id,
-      paidAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paidAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     if (!orgApiKey) {
@@ -202,7 +202,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
         tecnicoUid,
         stripePaymentIntentId: pi.id,
         estado: 'pendiente',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
       res.status(200).send('payment recorded; CFDI deferred (técnico sin FacturAPI)');
       return;
@@ -326,7 +326,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
         facturapiInvoiceId: invoice.id,
         error: (err as Error).message,
         estado: 'pendiente',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
       // fall through — save invoice metadata without URLs
     }
@@ -338,14 +338,14 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       servicioId,
       facturapiInvoiceId: invoice.id,
       folioFiscal: invoice.uuid,
-      fechaTimbrado: admin.firestore.FieldValue.serverTimestamp(),
+      fechaTimbrado: FieldValue.serverTimestamp(),
       subtotal: invoice.total / 1.16,
       iva: invoice.total - invoice.total / 1.16,
       total: invoice.total,
       xmlUrl,
       pdfUrl,
       estado: 'vigente',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
     // Post system message in the service chat (uses the same 'sistema'
@@ -359,7 +359,7 @@ export const onPaymentSucceededStripeWebhook = onRequest(
         nombreUsuario: 'ServiTec',
         mensaje: `CFDI emitido — folio ${invoice.uuid}`,
         tipo: 'sistema',
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestamp: FieldValue.serverTimestamp(),
         leido: false,
         metadata: {
           event: 'cfdi_emitted',
