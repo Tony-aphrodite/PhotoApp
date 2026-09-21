@@ -216,6 +216,11 @@ class AssignTechnicianScreen extends StatelessWidget {
                             // técnico is held on the verification screen and
                             // could not act on the job.
                             unverified: verified[tech.uid] == false,
+                          // The visit fee is paid up front to the técnico's
+                          // Stripe account; without one the cliente could
+                          // not authorize it.
+                          sinCuentaPagos: service.isDiagnostic &&
+                              tech.stripeConnectAccountId == null,
                             onAssign: () async {
                               final confirmed = await showDialog<bool>(
                                 context: context,
@@ -413,11 +418,13 @@ class _TechnicianCard extends StatelessWidget {
   final UserModel technician;
   final VoidCallback onAssign;
   final bool unverified;
+  final bool sinCuentaPagos;
 
   const _TechnicianCard({
     required this.technician,
     required this.onAssign,
     this.unverified = false,
+    this.sinCuentaPagos = false,
   });
 
   @override
@@ -565,6 +572,22 @@ class _TechnicianCard extends StatelessWidget {
             // técnico cannot take the job.
             if (unverified)
               UnverifiedEmailBadge(uid: technician.uid)
+            else if (sinCuentaPagos)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.warningColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Sin cuenta de pagos',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.warningColor,
+                  ),
+                ),
+              )
             else
               Container(
                 decoration: BoxDecoration(

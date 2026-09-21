@@ -125,6 +125,16 @@ class AdminFlagModel extends Equatable {
         return 'Falló el CFDI de comisión mensual';
       case 'phone_released':
         return 'Teléfono liberado por un administrador';
+      case 'work_stopped':
+        return 'Trabajo detenido por el técnico';
+      case 'work_stop_dispute':
+        return 'Disputa por trabajo detenido';
+      case 'technician_withdrew':
+        return 'El técnico canceló — reasignar servicio';
+      case 'technician_no_show_report':
+        return 'Reporte: el técnico no llegó';
+      case 'cfdi_diagnostico_pendiente':
+        return 'CFDI de visita de diagnóstico pendiente';
       default:
         return type;
     }
