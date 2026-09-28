@@ -24,7 +24,21 @@ class ServiceRepository {
     // Write the public body with `clienteTelefono` blanked so nothing sensitive
     // leaks even if rules are misconfigured.
     final publicBody = service.copyWith(clienteTelefono: '');
-    final docRef = await _servicesRef.add(publicBody.toFirestore());
+    final docRef = _servicesRef.doc();
+
+    // The request and the stamp on the cliente's profile go in one batch:
+    // firestore.rules allow a new request only when the previous stamp is
+    // older than 30 seconds *and* this batch renews it, which is what stops a
+    // burst of requests, including parallel ones (see solicitudPermitida).
+    await (_firestore.batch()
+          ..set(docRef, publicBody.toFirestore())
+          ..update(
+            _firestore
+                .collection(AppConstants.usersCollection)
+                .doc(service.clienteId),
+            {'ultimaSolicitudAt': FieldValue.serverTimestamp()},
+          ))
+        .commit();
 
     // Write the private contact subdoc.
     if (service.clienteTelefono.isNotEmpty) {

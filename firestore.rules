@@ -51,15 +51,25 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'tecnico';
     }
 
-    // Un cliente no puede crear solicitudes en ráfaga. El servidor sella
-    // users/{uid}.ultimaSolicitudAt en cada alta (service-lifecycle.ts) y aquí
-    // se exige que hayan pasado 30 segundos. Deshabilitar el botón en la app
-    // evita el doble toque; esto evita el script que llama al SDK directo.
+    // Un cliente no puede crear solicitudes en ráfaga: una cada 30 segundos.
+    // Deshabilitar el botón en la app evita el doble toque; esto evita el
+    // script que llama al SDK directo.
+    //
+    // La app crea la solicitud y sella users/{uid}.ultimaSolicitudAt con la
+    // hora del servidor en el MISMO batch, y aquí se exigen las dos cosas: que
+    // el sello anterior tenga más de 30 segundos (get) y que este batch lo
+    // renueve (getAfter). Así también se frenan las solicitudes lanzadas en
+    // paralelo: todas escriben el mismo perfil, Firestore las serializa, y a
+    // partir de la segunda el sello anterior ya es de hace un instante.
+    // (Antes lo sellaba el servidor después del alta, y lo que llegaba en ese
+    // segundo o dos pasaba sin control.)
+    //
     // El perfil ya se leyó para conocer el rol, así que no cuesta otra lectura.
     function solicitudPermitida() {
-      let ultima = get(/databases/$(database)/documents/users/$(request.auth.uid))
-          .data.get('ultimaSolicitudAt', null);
-      return ultima == null || request.time > ultima + duration.value(30, 's');
+      let perfil = /databases/$(database)/documents/users/$(request.auth.uid);
+      let antes = get(perfil).data.get('ultimaSolicitudAt', null);
+      return getAfter(perfil).data.get('ultimaSolicitudAt', null) == request.time &&
+             (antes == null || request.time > antes + duration.value(30, 's'));
     }
 
     // ===== USERS COLLECTION =====
@@ -118,11 +128,13 @@ service cloud.firestore {
             'stripeConnectAccountId',
             // Contadores de incidencias del técnico (no se presentó,
             // canceló, detuvo un trabajo); solo los escribe el servidor.
-            'incidencias',
-            // Sello de la última solicitud creada; es lo que hace cumplir el
-            // límite de altas en ráfaga, así que el cliente no puede tocarlo.
-            'ultimaSolicitudAt'
-          ]);
+            'incidencias'
+          ]) &&
+          // Sello de la última solicitud (ver solicitudPermitida): solo puede
+          // ponerse a la hora del servidor, nunca a una fecha elegida —
+          // atrasarlo esquivaría el límite de 30 segundos.
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['ultimaSolicitudAt']) ||
+           request.resource.data.ultimaSolicitudAt == request.time);
 
       allow delete: if isAdmin();
     }

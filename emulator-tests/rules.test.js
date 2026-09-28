@@ -46,23 +46,60 @@ test('cliente cannot set money or flow fields on their service', async () => {
 test('cliente cannot create a service carrying server fields', async () => {
   const db = verified('cli');
   const base = { clienteId: 'cli', estado: 'pendiente', tipoAsignacion: 'automatica' };
-  await assertSucceeds(setDoc(doc(db, 'servicios/n1'), base));
-  await assertFails(setDoc(doc(db, 'servicios/n2'), { ...base, flujo: 'estandar' }));
-  await assertFails(setDoc(doc(db, 'servicios/n3'), { ...base, costoFinal: 5 }));
+  // As the app writes it: the request plus the profile stamp, in one batch.
+  const request = (id, data) => {
+    const b = writeBatch(db);
+    b.set(doc(db, `servicios/${id}`), data);
+    b.update(doc(db, 'users/cli'), { ultimaSolicitudAt: serverTimestamp() });
+    return b.commit();
+  };
+  // Refused ones first: a failed batch writes nothing, so the stamp stays
+  // empty and only the server field can be what the rule refuses.
+  await assertFails(request('n2', { ...base, flujo: 'estandar' }));
+  await assertFails(request('n3', { ...base, costoFinal: 5 }));
+  await assertSucceeds(request('n1', base));
 });
 
 test('a cliente cannot create requests in bursts', async () => {
   const db = verified('cli');
   const base = { clienteId: 'cli', estado: 'pendiente', tipoAsignacion: 'automatica' };
-  const stamp = async (ms) => env.withSecurityRulesDisabled((ctx) =>
-    setDoc(doc(ctx.firestore(), 'users/cli'),
-      { rol: 'cliente', activo: true, telefono: '5511111111', ultimaSolicitudAt: Timestamp.fromMillis(ms) }));
+  const stamp = { ultimaSolicitudAt: serverTimestamp() };
+  // What the app does: the request and the stamp in one batch.
+  const request = (id) => {
+    const b = writeBatch(db);
+    b.set(doc(db, `servicios/${id}`), base);
+    b.update(doc(db, 'users/cli'), stamp);
+    return b.commit();
+  };
+  const stampedAt = (ms) => env.withSecurityRulesDisabled((ctx) =>
+    updateDoc(doc(ctx.firestore(), 'users/cli'), { ultimaSolicitudAt: Timestamp.fromMillis(ms) }));
 
-  // The server stamps the profile on every request it processes.
-  await stamp(Date.now());
-  await assertFails(setDoc(doc(db, 'servicios/burst1'), base), 'second request within 30 s');
-  await stamp(Date.now() - 31 * 1000);
-  await assertSucceeds(setDoc(doc(db, 'servicios/burst2'), base));
+  await assertSucceeds(request('b1'), 'first request');
+  await assertFails(request('b2'), 'second one within 30 s');
+  await assertFails(setDoc(doc(db, 'servicios/b3'), base), 'a request that does not renew the stamp');
+
+  await stampedAt(Date.now() - 31 * 1000);
+  await assertSucceeds(request('b4'), 'allowed again after 30 s');
+
+  // The stamp can only be set to the server's time: backdating it would
+  // defeat the limit.
+  await assertFails(updateDoc(doc(db, 'users/cli'), { ultimaSolicitudAt: Timestamp.fromMillis(0) }));
+  await assertSucceeds(updateDoc(doc(db, 'users/cli'), stamp));
+});
+
+test('parallel requests: only one gets through', async () => {
+  const db = verified('cli');
+  const base = { clienteId: 'cli', estado: 'pendiente', tipoAsignacion: 'automatica' };
+  // Five batches fired at once, as a script would: each writes the same
+  // profile, so Firestore serializes them and the rule sees the first stamp.
+  const results = await Promise.allSettled([1, 2, 3, 4, 5].map((i) => {
+    const b = writeBatch(db);
+    b.set(doc(db, `servicios/p${i}`), base);
+    b.update(doc(db, 'users/cli'), { ultimaSolicitudAt: serverTimestamp() });
+    return b.commit();
+  }));
+  const ok = results.filter((r) => r.status === 'fulfilled').length;
+  if (ok !== 1) throw new Error(`expected exactly 1 of 5 parallel requests to succeed, got ${ok}`);
 });
 
 test('direct cancel: allowed for standard flow, refused for diagnostic', async () => {

@@ -10,10 +10,10 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test": "tsc && node --test lib/lib/"
+    "test": "tsc && node --test lib/lib/*.test.js"
   },
   "engines": {
-    "node": "20"
+    "node": "24"
   },
   "main": "lib/index.js",
   "dependencies": {

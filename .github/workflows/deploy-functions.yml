@@ -78,12 +78,15 @@ jobs:
           echo "Deploying ${GITHUB_REF_NAME} to PRODUCTION."
 
       - name: Check out the repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Set up Node 20
-        uses: actions/setup-node@v4
+      # Same major as the functions' runtime (firebase.json). Node 20 is
+      # decommissioned on Cloud Functions on 2026-10-30: after that date a
+      # nodejs20 function can no longer be deployed or updated.
+      - name: Set up Node 24
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
           cache-dependency-path: functions/package-lock.json
 

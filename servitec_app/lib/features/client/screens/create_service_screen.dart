@@ -322,9 +322,14 @@ class _CreateServiceScreenState extends State<CreateServiceScreen>
       }
     } catch (e) {
       if (mounted) {
+        // firestore.rules accept one request every 30 seconds per cliente
+        // (solicitudPermitida); the form sends nothing else they could refuse.
+        final cooldown = e is FirebaseException && e.code == 'permission-denied';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text(cooldown
+                ? 'Acabas de enviar una solicitud. Espera unos segundos antes de enviar otra.'
+                : 'Error: ${e.toString()}'),
             backgroundColor: AppTheme.errorColor,
           ),
         );
