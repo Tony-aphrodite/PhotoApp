@@ -586,13 +586,16 @@ class _ServiceDetailScreenState extends State<ServiceDetailScreen> {
   }
 }
 
-/// "Ver factura (PDF)" row for a paid service.
+/// "Ver factura (PDF)" rows for a paid service — one per CFDI.
 ///
-/// Renders nothing at all while the CFDI is still being stamped, or if the
-/// técnico had no FacturAPI organization at payment time (in which case the
-/// webhook records the payment and flags it for an admin, but no invoice
-/// exists) — an absent invoice is a normal state here, not an error worth
-/// showing the customer.
+/// A diagnostic service is invoiced twice (the visit when the diagnosis ends,
+/// the balance when the repair is paid) and may also carry a nota de crédito
+/// if money was returned, so every comprobante gets its own row. Renders
+/// nothing at all while a CFDI is still being stamped, or if the técnico had
+/// no FacturAPI organization at payment time (in which case the webhook
+/// records the payment and flags it for an admin, but no invoice exists) — an
+/// absent invoice is a normal state here, not an error worth showing the
+/// customer.
 class _FacturaLink extends StatefulWidget {
   final String serviceId;
   final String uid;
@@ -614,64 +617,79 @@ class _FacturaLinkState extends State<_FacturaLink> {
   /// ServiceDetailScreen rebuilds on every service snapshot and on every
   /// photo-gallery swipe (`setState(_currentPage)`). Creating the future
   /// inline in build re-ran this Firestore query on each of those — a paid
-  /// read for an invoice that cannot change while the screen is open.
-  late final Future<FacturaModel?> _factura;
+  /// read for invoices that cannot change while the screen is open.
+  late final Future<List<FacturaModel>> _facturas;
 
   @override
   void initState() {
     super.initState();
-    _factura = context.read<FacturaRepository>().getForServiceAsParticipant(
+    _facturas = context.read<FacturaRepository>().listForServiceAsParticipant(
           servicioId: widget.serviceId,
           uid: widget.uid,
           asTecnico: widget.asTecnico,
         );
   }
 
+  Future<void> _open(BuildContext context, String pdfUrl) async {
+    final ok = await launchUrl(
+      Uri.parse(pdfUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir la factura.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<FacturaModel?>(
-      future: _factura,
+    return FutureBuilder<List<FacturaModel>>(
+      future: _facturas,
       builder: (context, snapshot) {
-        final pdfUrl = snapshot.data?.pdfUrl;
-        if (pdfUrl == null) return const SizedBox.shrink();
+        final facturas = (snapshot.data ?? const <FacturaModel>[])
+            .where((f) => f.pdfUrl != null)
+            .toList();
+        if (facturas.isEmpty) return const SizedBox.shrink();
 
-        return Padding(
-          padding: const EdgeInsets.only(top: 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () async {
-                final ok = await launchUrl(
-                  Uri.parse(pdfUrl),
-                  mode: LaunchMode.externalApplication,
-                );
-                if (!ok && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('No se pudo abrir la factura.'),
+        return Column(
+          children: [
+            for (final factura in facturas)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _open(context, factura.pdfUrl!),
+                    icon: Icon(
+                      factura.isNotaCredito
+                          ? Icons.undo_rounded
+                          : Icons.receipt_long_rounded,
                     ),
-                  );
-                }
-              },
-              icon: const Icon(Icons.receipt_long_rounded),
-              label: Text(
-                'Ver factura (PDF)',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.w600,
+                    label: Text(
+                      facturas.length == 1 && !factura.isNotaCredito
+                          ? 'Ver factura (PDF)'
+                          : '${factura.titulo} (PDF)',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.primaryColor,
+                      side: BorderSide(
+                        color: AppTheme.primaryColor.withValues(alpha: 0.4),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusMedium),
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppTheme.primaryColor,
-                side: BorderSide(
-                  color: AppTheme.primaryColor.withValues(alpha: 0.4),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-                ),
-              ),
-            ),
-          ),
+          ],
         );
       },
     );

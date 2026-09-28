@@ -210,6 +210,41 @@ Variants worth one run each:
 
 ---
 
+## Test 9b — CFDI in the diagnostic flow (two comprobantes)
+
+The accountant's rules, as implemented. Run this after Test 8f with a técnico
+who finished fiscal onboarding (otherwise every CFDI below is only queued as an
+admin alert, which is also worth checking once).
+
+1. **Visit charged, diagnosis not finished yet** (técnico tapped *Voy en
+   camino*): **no CFDI yet**. `facturas/` gets nothing; the chat says only that
+   the visit was charged.
+2. **Técnico taps *Diagnóstico terminado*** → the CFDI of the visit is stamped
+   now: `facturas/vis_{servicioId}` with `concepto: visita`, and a chat pill
+   *"CFDI emitido — folio …"*. Both devices see **"CFDI de la visita de
+   diagnóstico (PDF)"** on the service detail.
+3. **Cliente approves the repair and pays the balance** → a second CFDI with
+   `concepto: saldo`, **for the balance only** (price − visit), never the full
+   price. Two buttons now show on the service detail.
+4. **Cliente cancels while the técnico is on the way** (no diagnosis): the
+   visit is charged and **no CFDI is issued at all** — by design. An admin
+   alert *"Cobro sin CFDI (visita cancelada en camino)"* records the income.
+5. **A refund of an already-invoiced visit** (admin resolves a dispute below
+   the visit, or the técnico withdraws after diagnosing) → a **nota de crédito**
+   (CFDI de egreso) related to that CFDI, for the amount returned only. It
+   appears in `facturas/` as `tipo: nota_credito`, in **Admin → Facturas →
+   Devoluciones**, and as a chat pill.
+6. **Repair cheaper than the visit** (e.g. visit 400, repair 300): the cliente
+   pays nothing more, and an admin alert *"Reparación cubierta por la visita"*
+   is raised — the accountant wants both concepts on the single CFDI, which
+   needs a manual substitution.
+
+SAT keys (**ClaveProdServ**) come from **Admin → Categorías → (a category) →
+Clave SAT**. While they are empty every CFDI carries the generic technical
+services key `81111500`, which is what shipped before.
+
+---
+
 ## Test 10 — Appointments and the técnico's agenda
 
 1. On Device A (Cliente), open an assigned service and book an appointment for **tomorrow** (any slot).

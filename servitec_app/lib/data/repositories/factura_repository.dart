@@ -73,13 +73,15 @@ class FacturaRepository {
     return snap.docs.map((d) => FacturaModel.fromFirestore(d)).toList();
   }
 
-  /// The CFDI for [servicioId] as seen by one of its two participants.
+  /// Every CFDI of [servicioId] as seen by one of its two participants.
   ///
   /// Leads with the caller's own uid so the query satisfies the rules (see
-  /// [getByService]), then narrows to the service. Returns `null` when the
-  /// CFDI hasn't been stamped yet, or when the técnico had no FacturAPI
-  /// organization at payment time — both are normal states.
-  Future<FacturaModel?> getForServiceAsParticipant({
+  /// [getByService]), then narrows to the service. A service in the diagnostic
+  /// flow has up to three rows (visit, balance, nota de crédito); a standard
+  /// one has zero or one. An empty list is a normal state: the CFDI may still
+  /// be stamping, or the técnico had no FacturAPI organization at payment
+  /// time.
+  Future<List<FacturaModel>> listForServiceAsParticipant({
     required String servicioId,
     required String uid,
     required bool asTecnico,
@@ -87,10 +89,11 @@ class FacturaRepository {
     final snap = await _ref
         .where(asTecnico ? 'tecnicoUid' : 'clienteUid', isEqualTo: uid)
         .where('servicioId', isEqualTo: servicioId)
-        .limit(1)
+        .limit(5)
         .get();
-    if (snap.docs.isEmpty) return null;
-    return FacturaModel.fromFirestore(snap.docs.first);
+    final facturas = snap.docs.map((d) => FacturaModel.fromFirestore(d)).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return facturas;
   }
 
   /// Monthly commission facturas for a técnico across periods.

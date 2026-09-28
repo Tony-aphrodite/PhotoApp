@@ -626,9 +626,14 @@ class _FacturaCard extends StatelessWidget {
     final isComision = factura.isComision;
     final fecha = factura.fechaTimbrado ?? factura.createdAt;
 
-    // The commission CFDI is money going out, the service CFDI money coming
-    // in — colour-code so a técnico can tell them apart at a glance.
-    final accent = isComision ? AppTheme.accentColor : AppTheme.primaryColor;
+    // The commission CFDI and a nota de crédito are money going out, the
+    // service CFDI money coming in — colour-code so a técnico can tell them
+    // apart at a glance.
+    final accent = factura.isNotaCredito
+        ? AppTheme.errorColor
+        : isComision
+            ? AppTheme.accentColor
+            : AppTheme.primaryColor;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -650,9 +655,11 @@ class _FacturaCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  isComision
-                      ? Icons.percent_rounded
-                      : Icons.receipt_long_rounded,
+                  factura.isNotaCredito
+                      ? Icons.undo_rounded
+                      : isComision
+                          ? Icons.percent_rounded
+                          : Icons.receipt_long_rounded,
                   size: 20,
                   color: accent,
                 ),
@@ -663,9 +670,7 @@ class _FacturaCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isComision
-                          ? 'Comisión ServiTec${factura.periodo != null ? ' · ${factura.periodo}' : ''}'
-                          : 'CFDI por servicio',
+                      factura.titulo,
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 14,
                         fontWeight: FontWeight.w700,

@@ -29,6 +29,7 @@ import {
   wrongState,
 } from './lib/flow-helpers';
 import { ESTADO, FlowError, fmtMxn } from './lib/service-flow-rules';
+import { cfdiSafely, emitCreditNote, stampVisitCfdi } from './lib/cfdi';
 import {
   FLUJO,
   PAGO,
@@ -196,7 +197,7 @@ async function enCamino(ctx: Ctx, servicioId: string) {
 }
 
 async function diagnosticoTerminado(ctx: Ctx, servicioId: string) {
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
     const s = await readService(tx, servicioId);
     if (s.data.tecnicoId !== ctx.uid) throw new HttpsError('permission-denied', 'Solo el técnico asignado.');
     if (s.data.estado !== ESTADO.enCamino) wrongState();
@@ -211,6 +212,10 @@ async function diagnosticoTerminado(ctx: Ctx, servicioId: string) {
       { event: 'diagnosis_done' });
     return { estado: ESTADO.diagnosticoRealizado };
   });
+  // The visit's CFDI is stamped here, not when the card was charged: the
+  // accountant invoices the diagnosis once it has actually been performed.
+  await cfdiSafely('visita', servicioId, () => stampVisitCfdi(servicioId));
+  return result;
 }
 
 const WITHDRAWABLE: string[] = [
@@ -241,6 +246,12 @@ async function retirarse(ctx: Ctx, servicioId: string) {
   if (pago === PAGO.cobrado && pi) {
     await refundVisit(pi);
     refunded = pre.visita.montoCobrado ?? 0;
+    // Money returned after a CFDI was stamped: the accountant asks for a
+    // nota de crédito, never a cancellation. No CFDI (the técnico left before
+    // diagnosing) means there is nothing to relate to, and this is a no-op.
+    await cfdiSafely('nota_credito', servicioId, () => emitCreditNote({
+      servicioId, concepto: 'visita', motivo: 'el técnico canceló el servicio',
+    }));
   }
 
   await db.runTransaction(async (tx) => {
@@ -412,6 +423,22 @@ async function cancelar(ctx: Ctx, servicioId: string) {
       updatedAt: now(),
     });
     if (lateNoShow) tx.update(db.collection('users').doc(s.data.tecnicoId), incidentUpdate('noSePresento'));
+    if (charged && s.data.estado === ESTADO.enCamino) {
+      // Charged, not refundable, and never diagnosed: per the accountant no
+      // CFDI is issued, since no service was rendered. The income still
+      // exists, so it is flagged — these are the charges an accountant may
+      // want to close the month with a CFDI global a público en general.
+      tx.set(db.collection('admin_flags').doc(), {
+        type: 'cobro_sin_cfdi',
+        servicioId,
+        clienteId: s.data.clienteId,
+        tecnicoId: s.data.tecnicoId,
+        monto: s.data.visita?.montoCobrado ?? 0,
+        motivo: 'cancelación del cliente con el técnico en camino',
+        estado: 'pendiente',
+        createdAt: now(),
+      });
+    }
     systemMessage(tx, s.id,
       charged
         ? `Servicio cancelado por el cliente. La visita de diagnóstico (${fmtMxn(s.data.visita.montoCobrado ?? 0)}) no es reembolsable porque el técnico ya había salido.`
@@ -496,7 +523,13 @@ async function resolverNoLlego(ctx: Ctx, servicioId: string, reembolsar: boolean
     if (s.data.estado !== ESTADO.reporteNoLlego) wrongState();
     return s.data;
   });
-  if (reembolsar && pre.visita?.paymentIntentId) await refundVisit(pre.visita.paymentIntentId);
+  if (reembolsar && pre.visita?.paymentIntentId) {
+    await refundVisit(pre.visita.paymentIntentId);
+    // Usually a no-op: a no-show means no diagnosis, so no CFDI was stamped.
+    await cfdiSafely('nota_credito', servicioId, () => emitCreditNote({
+      servicioId, concepto: 'visita', motivo: 'el técnico no se presentó',
+    }));
+  }
 
   return db.runTransaction(async (tx) => {
     const s = await readService(tx, servicioId);

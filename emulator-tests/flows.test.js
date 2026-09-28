@@ -137,6 +137,14 @@ async function pay(id) {
 
 const opsFor = (piId, op) => mock.log.filter((l) => l.id === piId && l.op === op);
 
+/** admin_flags raised for a service, newest first. FacturAPI is never called
+ * from the emulator (no técnico here has an organization), so a deferred CFDI
+ * flag is how a stamping attempt shows up — including its amount. */
+async function flagsFor(servicioId, type) {
+  const snap = await db.collection('admin_flags').where('servicioId', '==', servicioId).get();
+  return snap.docs.map((d) => d.data()).filter((f) => !type || f.type === type);
+}
+
 // ---------------------------------------------------------------------------
 // setup
 // ---------------------------------------------------------------------------
@@ -192,6 +200,10 @@ test('standard: quote, revision rejected, original scope, pay', async () => {
   assert.equal(s.montoPagado, 1160);
   const tec = (await db.doc('users/tec').get()).data();
   assert.equal(tec.serviciosCompletados, 1);
+  const cfdi = await flagsFor('std1', 'cfdi_pending_technician_not_configured');
+  assert.equal(cfdi.length, 1);
+  assert.equal(cfdi[0].concepto, 'servicio');
+  assert.equal(cfdi[0].monto, 1160, 'the whole price — there was no visit');
 });
 
 test('standard: stop, dispute, admin resolves', async () => {
@@ -257,8 +269,8 @@ test('diagnostic: hold, charge on the way, credit against the repair', async () 
   await webhook(pi);
   s = await svc('dx1');
   assert.equal(s.estado, 'en_camino', 'a visit charge does not close the service');
-  const flags = await db.collection('admin_flags').where('servicioId', '==', 'dx1').get();
-  assert.ok(flags.docs.some((d) => d.get('type') === 'cfdi_diagnostico_pendiente'));
+  assert.equal((await flagsFor('dx1', 'cfdi_pending_technician_not_configured')).length, 0,
+    'the visit is invoiced when the diagnosis ends, not when the card is charged');
 
   // 1293.10 + 16% = 1500.00
   await call('tec', 'submitQuotation', { servicioId: 'dx1', items: item(1293.1) });
@@ -280,6 +292,13 @@ test('diagnostic: hold, charge on the way, credit against the repair', async () 
   s = await svc('dx1');
   assert.equal(s.estado, 'pagado');
   assert.equal(s.montoPagado, 1500);
+
+  // The CFDI of this charge covers the balance alone: the visit has its own,
+  // so invoicing costoFinal here would bill the 400 twice.
+  const cfdi = await flagsFor('dx1', 'cfdi_pending_technician_not_configured');
+  assert.equal(cfdi.length, 1);
+  assert.equal(cfdi[0].concepto, 'saldo');
+  assert.equal(cfdi[0].monto, 1100);
 });
 
 test('diagnostic: repair below the visit closes with no second charge', async () => {
@@ -295,6 +314,10 @@ test('diagnostic: repair below the visit closes with no second charge', async ()
   assert.equal(s.estado, 'pagado');
   assert.equal(s.cierre, 'cubierto_por_visita');
   assert.equal((await db.doc('users/tec').get()).get('serviciosCompletados'), before + 1);
+  const [covered] = await flagsFor('dx2', 'cfdi_reparacion_cubierta_por_visita');
+  assert.ok(covered, 'flagged: both concepts belong on the visit CFDI');
+  assert.equal(covered.montoReparacion, 300);
+  assert.equal(covered.montoVisita, 400);
 });
 
 test('diagnostic: cancel before travel releases the hold', async () => {
@@ -317,6 +340,12 @@ test('diagnostic: cancel after travel keeps the visit', async () => {
   assert.equal(s.estado, 'pagado');
   assert.equal(s.cierre, 'cancelado_por_cliente');
   assert.equal(opsFor(pi, 'refund').length, 0);
+  // No diagnosis was performed, so no CFDI is issued (accountant); the income
+  // is flagged instead, since it still exists.
+  assert.equal((await flagsFor('dx4', 'cfdi_pending_technician_not_configured')).length, 0);
+  const [sinCfdi] = await flagsFor('dx4', 'cobro_sin_cfdi');
+  assert.ok(sinCfdi);
+  assert.equal(sinCfdi.monto, 400);
 });
 
 test('diagnostic: técnico withdraws after charging — refund, incident, back to admins', async () => {
@@ -369,6 +398,37 @@ test('diagnostic: stop floor is the visit; admin may go below and refunds the di
   assert.equal(s.visita.montoReembolsado, 250);
 });
 
+test('diagnostic: a refund of an invoiced visit raises a nota de crédito', async () => {
+  await newService('dxa', 'aire_acondicionado');
+  const pi = await confirmVisit('dxa');
+  await visit('tec', 'dxa', 'en_camino');
+  await visit('tec', 'dxa', 'diagnostico_terminado');
+  // Stand in for the CFDI the visit would have been stamped with — no técnico
+  // in the emulator has a FacturAPI organization.
+  await db.doc('facturas/vis_dxa').set({
+    tipo: 'tecnico_cliente', concepto: 'visita', servicioId: 'dxa',
+    tecnicoUid: 'tec', clienteUid: 'cli', folioFiscal: 'UUID-TEST-DXA',
+    receptor: { legal_name: 'PUBLICO EN GENERAL', tax_id: 'XAXX010101000', tax_system: '616', address: { zip: '00000' } },
+    conceptos: [{ descripcion: 'Visita y diagnóstico técnico — Prueba dxa', claveProdServ: '81111500', importe: 400 }],
+    subtotal: 344.83, iva: 55.17, total: 400, estado: 'vigente',
+  });
+
+  await quoteAndApprove('dxa', 1293.1);
+  await call('tec', 'serviceWorkAction', { servicioId: 'dxa', accion: 'iniciar' });
+  await call('tec', 'stopWork', {
+    servicioId: 'dxa', motivo: 'dano_impide_terminar',
+    descripcion: 'Tarjeta electrónica quemada', fotos: ['https://x/3.jpg'], montoPropuesto: 400,
+  });
+  await call('cli', 'respondStop', { servicioId: 'dxa', respuesta: 'disputar', comentario: 'No quedó resuelto' });
+  await call('adm', 'adminResolveDispute', { servicioId: 'dxa', monto: 150, nota: 'Solo diagnóstico parcial' });
+
+  assert.equal(opsFor(pi, 'refund')[0].amount, 25000, 'refunds 400 - 150');
+  const [nc] = await flagsFor('dxa', 'nota_credito_pendiente');
+  assert.ok(nc, 'a CFDI de egreso is queued against the visit CFDI');
+  assert.equal(nc.folioOrigen, 'UUID-TEST-DXA', 'related to the CFDI de ingreso');
+  assert.equal(nc.monto, 250, 'only the amount returned');
+});
+
 test('diagnostic: cliente declines the repair and pays only the visit', async () => {
   await newService('dx8', 'aire_acondicionado');
   await confirmVisit('dx8');
@@ -376,6 +436,10 @@ test('diagnostic: cliente declines the repair and pays only the visit', async ()
   await visit('tec', 'dx8', 'diagnostico_terminado');
   const s0 = await svc('dx8');
   assert.equal(s0.estado, 'diagnostico_realizado');
+  const [visitCfdi] = await flagsFor('dx8', 'cfdi_pending_technician_not_configured');
+  assert.ok(visitCfdi, 'the visit CFDI is stamped as soon as the diagnosis is done');
+  assert.equal(visitCfdi.concepto, 'visita');
+  assert.equal(visitCfdi.monto, 400);
   assert.ok(s0.autoCierre && s0.revisionAt, 'auto-close scheduled');
   await visit('cli', 'dx8', 'cerrar_solo_diagnostico');
   const s = await svc('dx8');

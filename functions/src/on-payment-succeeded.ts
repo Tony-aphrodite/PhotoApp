@@ -12,11 +12,9 @@
  *   1. Verify Stripe signature.
  *   2. Load `servicioId` from PaymentIntent metadata → fetch the service +
  *      técnico documents.
- *   3. Stamp the CFDI técnico → cliente via FacturAPI (using the técnico's
- *      per-organization API key stored on the user document).
- *   4. Generate the ServiTec-branded PDF from the returned XML.
- *   5. Persist both XML and PDF to Cloud Storage.
- *   6. Insert a row in `facturas` (tipo: tecnico_cliente).
+ *   3. Stamp the CFDI técnico → cliente for the amount actually charged
+ *      (lib/cfdi.ts: FacturAPI, branded PDF, Storage, `facturas` row). A
+ *      diagnostic visit is invoiced separately, when the diagnosis ends.
  *   7. Post a system message into the service chat.
  *   8. Record the transaction in Firestore for the earnings / commissions view.
  *
@@ -25,16 +23,9 @@
 
 import { onRequest } from 'firebase-functions/v2/https';
 import { visitPaidOf } from './lib/visit-rules';
-import { db, admin, FieldValue } from './lib/admin';
+import { db, FieldValue } from './lib/admin';
 import { stripe } from './lib/stripe';
-import { facturapiForOrg } from './lib/facturapi';
-import { renderBrandedCfdiPdf } from './lib/pdf';
-import { uploadCfdiXml, uploadCfdiPdf } from './lib/storage';
-import {
-  downloadAsBuffer,
-  extractXmlAttr,
-  buildCadenaOriginalTfd,
-} from './lib/cfdi-xml';
+import { cfdiSafely, stampChargeCfdi } from './lib/cfdi';
 
 export const onPaymentSucceededStripeWebhook = onRequest(
   { region: 'us-central1', memory: '512MiB' },
@@ -110,27 +101,12 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     }, { merge: true });
 
     if (concepto === 'visita') {
-      // A visit fee is its own charge and, per the accountant, gets its own
-      // CFDI. When to stamp it and under which SAT key is still being
-      // confirmed, so it is queued for an admin rather than stamped now. The
-      // service state was already moved by the "Voy en camino" callable; the
-      // job is not complete yet, so no counters here.
-      const txRef = db.collection('transacciones').doc(pi.id);
-      if (!(await txRef.get()).data()?.cfdiEnCola) {
-        const batch = db.batch();
-        batch.set(db.collection('admin_flags').doc(), {
-          type: 'cfdi_diagnostico_pendiente',
-          servicioId,
-          tecnicoUid,
-          stripePaymentIntentId: pi.id,
-          monto: totalMxn,
-          estado: 'pendiente',
-          createdAt: FieldValue.serverTimestamp(),
-        });
-        batch.update(txRef, { cfdiEnCola: true });
-        await batch.commit();
-      }
-      res.status(200).send('visit charge recorded; CFDI queued');
+      // The visit fee gets its own CFDI, but only once the técnico has
+      // actually diagnosed something — it is stamped by visitAction
+      // ('diagnostico_terminado'), not here (accountant, 2026-09-23). The
+      // service state was already moved by the "Voy en camino" callable, and
+      // the job is not finished, so no counters either.
+      res.status(200).send('visit charge recorded');
       return;
     }
     const visitPaid = visitPaidOf(service);
@@ -138,7 +114,6 @@ export const onPaymentSucceededStripeWebhook = onRequest(
     // Only needed from here on (CFDI), so a visit charge skips this read.
     const tecnicoDoc = await db.collection('users').doc(tecnicoUid).get();
     const tecnico = tecnicoDoc.data()!;
-    const orgApiKey: string | undefined = tecnico?.facturapi?.organizationApiKey;
 
     // The técnico's completed-services counter. Clients cannot write it
     // (firestore.rules protects it, correctly — it feeds assignment scoring),
@@ -193,184 +168,27 @@ export const onPaymentSucceededStripeWebhook = onRequest(
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    if (!orgApiKey) {
-      // Técnico can't emit CFDIs yet (grace period or missing CSD). We already
-      // persisted the transaction so the money is tracked; flag for admin.
-      await db.collection('admin_flags').add({
-        type: 'cfdi_pending_technician_not_configured',
-        servicioId,
-        tecnicoUid,
-        stripePaymentIntentId: pi.id,
-        estado: 'pendiente',
-        createdAt: FieldValue.serverTimestamp(),
-      });
-      res.status(200).send('payment recorded; CFDI deferred (técnico sin FacturAPI)');
-      return;
-    }
-
-    const fx = facturapiForOrg(orgApiKey);
-
-    // Look up receptor (cliente) fiscal data. If the cliente hasn't filled
-    // in a personal RFC on their profile, the CFDI is issued to "público en
-    // general" per SAT conventions (RFC XAXX010101000, régimen 616, ZIP is
-    // required — falls back to the emisor's ZIP if the cliente has none).
-    const clienteDoc = await db.collection('users').doc(clienteUid).get();
-    const cliente = clienteDoc.data() || {};
-    const clienteHasRfc =
-        typeof cliente.rfc === 'string' && cliente.rfc.length >= 12;
-    const receptor = clienteHasRfc
-      ? {
-          legal_name: (cliente.razonSocial as string) ||
-              `${cliente.nombre ?? ''} ${cliente.apellido ?? ''}`.trim(),
-          tax_id: cliente.rfc as string,
-          tax_system: (cliente.regimenFiscal as string) || '616',
-          address: {
-            zip: (cliente.codigoPostalFiscal as string) ||
-                (tecnico.codigoPostalFiscal as string) ||
-                '00000',
-          },
-        }
-      : {
-          legal_name: 'PUBLICO EN GENERAL',
-          tax_id: 'XAXX010101000',
-          tax_system: '616', // Sin obligaciones fiscales
-          address: {
-            zip: (tecnico.codigoPostalFiscal as string) || '00000',
-          },
-        };
-
-    // Stamp CFDI técnico → cliente.
-    // product_key 81111500 = "Instalación y mantenimiento de equipos y sistemas"
-    // (SAT genérico para servicios técnicos; ajustar por categoría más adelante).
-    const invoice = await fx.invoices.create({
-      customer: receptor,
-      items: [
-        {
-          quantity: 1,
-          product: {
-            description: service.titulo,
-            product_key: '81111500',
-            price: (service.costoFinal ?? service.estimacionCosto ?? 0),
-          },
-        },
-      ],
-      payment_form: '04', // tarjeta de crédito
-      payment_method: 'PUE',
-      use: clienteHasRfc ? 'G03' : 'S01', // G03 = gastos en general, S01 = sin efectos fiscales
-    });
-
-    // Reserve a Firestore doc id so both the XML and the PDF land at
-    // predictable Storage paths.
-    const facturaDocRef = db.collection('facturas').doc();
-    const facturaId = facturaDocRef.id;
-
-    // Download the stamped XML from FacturAPI, generate our branded PDF,
-    // upload both to Cloud Storage. If anything in this pipeline fails we
-    // still persist the invoice metadata (URLs null) so the payment isn't
-    // stuck — an admin can regenerate artifacts later.
-    let xmlUrl: string | null = null;
-    let pdfUrl: string | null = null;
-
-    try {
-      const xmlBuf = await downloadAsBuffer(
-        await fx.invoices.downloadXml(invoice.id),
-      );
-      xmlUrl = await uploadCfdiXml(facturaId, xmlBuf);
-
-      // Extract sellos + cadena original from XML using simple regex — avoids
-      // pulling in a full XML parser dependency for the ~4 fields we need.
-      const xmlText = xmlBuf.toString('utf8');
-      const selloEmisor = extractXmlAttr(xmlText, 'Sello') ?? '';
-      const selloSat = extractXmlAttr(xmlText, 'SelloSAT') ?? '';
-      const noCertSat = extractXmlAttr(xmlText, 'NoCertificadoSAT') ?? '';
-      // Cadena original TFD is reconstructed from the TFD node.
-      const cadenaOriginalTfd = buildCadenaOriginalTfd(xmlText);
-
-      const pdfBuf = await renderBrandedCfdiPdf({
-        folioFiscal: invoice.uuid,
-        fechaTimbrado: extractXmlAttr(xmlText, 'FechaTimbrado') ??
-            new Date().toISOString(),
-        emisor: {
-          rfc: (tecnico.rfc as string) ?? '',
-          razonSocial: (tecnico.razonSocial as string) ??
-              `${tecnico.nombre ?? ''} ${tecnico.apellido ?? ''}`.trim(),
-          regimenFiscal: (tecnico.regimenFiscal as string) ?? '',
-        },
-        receptor: {
-          rfc: receptor.tax_id,
-          razonSocial: receptor.legal_name,
-          usoCfdi: clienteHasRfc ? 'G03' : 'S01',
-        },
-        items: [
-          {
-            description: service.titulo,
-            quantity: 1,
-            unitPrice: (service.costoFinal ?? service.estimacionCosto ?? 0),
-            subtotal: (service.costoFinal ?? service.estimacionCosto ?? 0),
-          },
-        ],
-        subtotal: invoice.total / 1.16,
-        iva: invoice.total - invoice.total / 1.16,
-        total: invoice.total,
-        selloEmisor,
-        selloSat: selloSat + (noCertSat ? ` (Cert ${noCertSat})` : ''),
-        cadenaOriginalTfd,
-      });
-      pdfUrl = await uploadCfdiPdf(facturaId, pdfBuf);
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('CFDI artifact upload failed', err);
-      await db.collection('admin_flags').add({
-        type: 'cfdi_artifact_generation_failed',
-        servicioId,
-        facturapiInvoiceId: invoice.id,
-        error: (err as Error).message,
-        estado: 'pendiente',
-        createdAt: FieldValue.serverTimestamp(),
-      });
-      // fall through — save invoice metadata without URLs
-    }
-
-    await facturaDocRef.set({
-      tipo: 'tecnico_cliente',
+    // CFDI for what was charged *now*. In the diagnostic flow that is the
+    // balance: the visit was invoiced on its own when the diagnosis ended, so
+    // invoicing `costoFinal` here would bill it twice. A técnico still in the
+    // grace period has no FacturAPI organization, in which case stampCfdi
+    // flags it for an admin rather than failing — the money has moved either
+    // way.
+    const cliente = (await db.collection('users').doc(clienteUid).get()).data() ?? {};
+    await cfdiSafely('cobro', servicioId, () => stampChargeCfdi({
+      servicioId,
+      service,
+      paymentIntentId: pi.id,
+      cobradoMxn: totalMxn,
       tecnicoUid,
       clienteUid,
-      servicioId,
-      facturapiInvoiceId: invoice.id,
-      folioFiscal: invoice.uuid,
-      fechaTimbrado: FieldValue.serverTimestamp(),
-      subtotal: invoice.total / 1.16,
-      iva: invoice.total - invoice.total / 1.16,
-      total: invoice.total,
-      xmlUrl,
-      pdfUrl,
-      estado: 'vigente',
-      createdAt: FieldValue.serverTimestamp(),
-    });
-
-    // Post system message in the service chat (uses the same 'sistema'
-    // convention already wired in Flutter — see MessageModel.tipoSistema).
-    await db
-      .collection('servicios')
-      .doc(servicioId)
-      .collection('mensajes')
-      .add({
-        userId: 'system',
-        nombreUsuario: 'ServiTec',
-        mensaje: `CFDI emitido — folio ${invoice.uuid}`,
-        tipo: 'sistema',
-        timestamp: FieldValue.serverTimestamp(),
-        leido: false,
-        metadata: {
-          event: 'cfdi_emitted',
-          facturaId: invoice.id,
-          folioFiscal: invoice.uuid,
-        },
-      });
+      tecnico,
+      cliente,
+    }));
 
     res.status(200).send('ok');
   },
 );
 
-// XML helpers now live in ./lib/cfdi-xml — the monthly commission cron needs
-// the same readers.
+// Stamping lives in ./lib/cfdi — the diagnostic visit and the notas de
+// crédito of a refund go through the same pipeline.

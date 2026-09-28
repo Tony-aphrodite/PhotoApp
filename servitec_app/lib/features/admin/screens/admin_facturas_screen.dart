@@ -82,6 +82,12 @@ class _AdminFacturasScreenState extends State<AdminFacturasScreen> {
                   selected: _tipo == FacturaModel.tipoServitecComision,
                   onTap: () => _onTipo(FacturaModel.tipoServitecComision),
                 ),
+                const SizedBox(width: 8),
+                _Chip(
+                  label: 'Devoluciones',
+                  selected: _tipo == FacturaModel.tipoNotaCredito,
+                  onTap: () => _onTipo(FacturaModel.tipoNotaCredito),
+                ),
               ],
             ),
           ),
@@ -216,7 +222,11 @@ class _FacturaRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isComision = factura.isComision;
-    final accent = isComision ? AppTheme.accentColor : AppTheme.primaryColor;
+    final accent = factura.isNotaCredito
+        ? AppTheme.errorColor
+        : isComision
+            ? AppTheme.accentColor
+            : AppTheme.primaryColor;
     final fecha = factura.fechaTimbrado ?? factura.createdAt;
 
     return Container(
@@ -232,16 +242,18 @@ class _FacturaRow extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isComision ? Icons.percent_rounded : Icons.receipt_long_rounded,
+                factura.isNotaCredito
+                    ? Icons.undo_rounded
+                    : isComision
+                        ? Icons.percent_rounded
+                        : Icons.receipt_long_rounded,
                 size: 18,
                 color: accent,
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  isComision
-                      ? 'Comisión ServiTec${factura.periodo != null ? ' · ${factura.periodo}' : ''}'
-                      : 'CFDI de servicio',
+                  factura.titulo,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
@@ -250,7 +262,8 @@ class _FacturaRow extends StatelessWidget {
                 ),
               ),
               Text(
-                CurrencyFormatter.format(factura.total),
+                '${factura.isNotaCredito ? '-' : ''}'
+                '${CurrencyFormatter.format(factura.total)}',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w800,

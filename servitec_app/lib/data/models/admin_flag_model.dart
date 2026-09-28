@@ -135,6 +135,14 @@ class AdminFlagModel extends Equatable {
         return 'Reporte: el técnico no llegó';
       case 'cfdi_diagnostico_pendiente':
         return 'CFDI de visita de diagnóstico pendiente';
+      case 'cfdi_fallido':
+        return 'No se pudo timbrar un CFDI — revisar';
+      case 'nota_credito_pendiente':
+        return 'Nota de crédito pendiente — técnico sin datos fiscales';
+      case 'cobro_sin_cfdi':
+        return 'Cobro sin CFDI (visita cancelada en camino)';
+      case 'cfdi_reparacion_cubierta_por_visita':
+        return 'Reparación cubierta por la visita — revisar conceptos del CFDI';
       default:
         return type;
     }

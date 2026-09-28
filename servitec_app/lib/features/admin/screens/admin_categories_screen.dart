@@ -164,6 +164,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
   late final TextEditingController _label;
   late final TextEditingController _icon;
   late final TextEditingController _precio;
+  late final TextEditingController _clave;
+  late final TextEditingController _claveDiag;
   late bool _diagnostico;
   String? _precioError;
 
@@ -176,6 +178,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     _diagnostico = widget.existing?.flujo == CategoryModel.flujoDiagnostico;
     final p = widget.existing?.precioDiagnostico ?? 0;
     _precio = TextEditingController(text: p > 0 ? p.toStringAsFixed(0) : '');
+    _clave = TextEditingController(text: widget.existing?.claveProdServ ?? '');
+    _claveDiag = TextEditingController(text: widget.existing?.claveDiagnostico ?? '');
   }
 
   @override
@@ -184,6 +188,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
     _label.dispose();
     _icon.dispose();
     _precio.dispose();
+    _clave.dispose();
+    _claveDiag.dispose();
     super.dispose();
   }
 
@@ -221,6 +227,8 @@ class _CategoryDialogState extends State<_CategoryDialog> {
         icon: icon.isEmpty ? '📋' : icon,
         flujo: _diagnostico ? CategoryModel.flujoDiagnostico : CategoryModel.flujoEstandar,
         precioDiagnostico: _diagnostico ? precio : 0,
+        claveProdServ: _clave.text.trim(),
+        claveDiagnostico: _diagnostico ? _claveDiag.text.trim() : '',
       ),
     );
   }
@@ -286,6 +294,30 @@ class _CategoryDialogState extends State<_CategoryDialog> {
                 errorText: _precioError,
               ),
               onChanged: (_) => setState(() => _precioError = null),
+            ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _clave,
+            keyboardType: TextInputType.number,
+            maxLength: 8,
+            decoration: const InputDecoration(
+              labelText: 'Clave SAT del servicio (ClaveProdServ)',
+              helperText: 'La que indique el contador. Si la dejas vacía se usa la clave genérica 81111500.',
+              helperMaxLines: 3,
+              counterText: '',
+            ),
+          ),
+          if (_diagnostico)
+            TextField(
+              controller: _claveDiag,
+              keyboardType: TextInputType.number,
+              maxLength: 8,
+              decoration: const InputDecoration(
+                labelText: 'Clave SAT del diagnóstico',
+                helperText: 'Se usa en el CFDI de la visita de diagnóstico.',
+                helperMaxLines: 2,
+                counterText: '',
+              ),
             ),
         ],
       ),

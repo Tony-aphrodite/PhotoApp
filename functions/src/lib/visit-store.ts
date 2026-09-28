@@ -26,13 +26,20 @@ export interface CategoryFlow {
 let categoriesCache: { at: number; data: Data } | null = null;
 const CATEGORY_TTL_MS = 5 * 60 * 1000;
 
-/** One document read per instance every 5 minutes, however many services. */
-export async function categoryFlow(categoria: string): Promise<CategoryFlow> {
+/**
+ * One category's raw config. One document read per instance every 5 minutes,
+ * however many services — the CFDI code reads SAT keys from here too.
+ */
+export async function categoryConfig(categoria: string): Promise<Data> {
   if (!categoriesCache || Date.now() - categoriesCache.at > CATEGORY_TTL_MS) {
     const snap = await db.collection('configuracion').doc('categorias').get();
     categoriesCache = { at: Date.now(), data: snap.data() ?? {} };
   }
-  const c = (categoriesCache.data[categoria] ?? {}) as Data;
+  return (categoriesCache.data[categoria] ?? {}) as Data;
+}
+
+export async function categoryFlow(categoria: string): Promise<CategoryFlow> {
+  const c = await categoryConfig(categoria);
   const precio = Number(c.precioDiagnostico) || 0;
   return {
     // A diagnostic category without a fee would charge nothing; fall back to

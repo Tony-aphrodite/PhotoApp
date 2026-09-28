@@ -27,6 +27,13 @@ class CategoryModel extends Equatable {
   /// fee is treated as standard by the server.
   final double precioDiagnostico;
 
+  /// SAT ClaveProdServ for this category's work, and for its diagnosis, as the
+  /// accountant assigns them. Empty means "use the generic technical-services
+  /// key" (functions/src/lib/cfdi-rules.ts), which is what every CFDI carried
+  /// before the list existed.
+  final String claveProdServ;
+  final String claveDiagnostico;
+
   static const flujoEstandar = 'estandar';
   static const flujoDiagnostico = 'diagnostico';
 
@@ -40,6 +47,8 @@ class CategoryModel extends Equatable {
     this.orden = 0,
     this.flujo = flujoEstandar,
     this.precioDiagnostico = 0,
+    this.claveProdServ = '',
+    this.claveDiagnostico = '',
   });
 
   factory CategoryModel.fromMap(String key, Map<String, dynamic> m) =>
@@ -51,6 +60,8 @@ class CategoryModel extends Equatable {
         orden: (m['orden'] as num?)?.toInt() ?? 0,
         flujo: m['flujo'] as String? ?? flujoEstandar,
         precioDiagnostico: (m['precioDiagnostico'] as num?)?.toDouble() ?? 0,
+        claveProdServ: m['claveProdServ'] as String? ?? '',
+        claveDiagnostico: m['claveDiagnostico'] as String? ?? '',
       );
 
   Map<String, dynamic> toMap() => {
@@ -60,6 +71,8 @@ class CategoryModel extends Equatable {
         'orden': orden,
         'flujo': flujo,
         'precioDiagnostico': precioDiagnostico,
+        'claveProdServ': claveProdServ,
+        'claveDiagnostico': claveDiagnostico,
       };
 
   CategoryModel copyWith({
@@ -69,6 +82,8 @@ class CategoryModel extends Equatable {
     int? orden,
     String? flujo,
     double? precioDiagnostico,
+    String? claveProdServ,
+    String? claveDiagnostico,
   }) =>
       CategoryModel(
         key: key,
@@ -78,8 +93,11 @@ class CategoryModel extends Equatable {
         orden: orden ?? this.orden,
         flujo: flujo ?? this.flujo,
         precioDiagnostico: precioDiagnostico ?? this.precioDiagnostico,
+        claveProdServ: claveProdServ ?? this.claveProdServ,
+        claveDiagnostico: claveDiagnostico ?? this.claveDiagnostico,
       );
 
   @override
-  List<Object?> get props => [key, label, icon, activo, orden, flujo, precioDiagnostico];
+  List<Object?> get props =>
+      [key, label, icon, activo, orden, flujo, precioDiagnostico, claveProdServ, claveDiagnostico];
 }

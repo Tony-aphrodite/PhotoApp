@@ -43,6 +43,33 @@ import {
 } from './lib/service-flow-rules';
 import { FLUJO, finalClose, remainingAfterVisit, visitPaidOf } from './lib/visit-rules';
 import { incidentUpdate, refundVisit, scheduleFor } from './lib/visit-store';
+import { cfdiSafely, emitCreditNote } from './lib/cfdi';
+
+/**
+ * The repair ended up costing no more than the diagnostic visit, so the client
+ * pays nothing further. The visit's CFDI was already stamped when the
+ * diagnosis ended; the accountant would rather see both concepts on that one
+ * comprobante, which is only possible by substituting it, so the case is left
+ * for an admin with everything needed to decide.
+ */
+function flagCoveredByVisit(
+  tx: FirebaseFirestore.Transaction,
+  servicioId: string,
+  s: Data,
+  costoFinal: number,
+): void {
+  tx.set(db.collection('admin_flags').doc(), {
+    type: 'cfdi_reparacion_cubierta_por_visita',
+    servicioId,
+    clienteId: s.clienteId,
+    tecnicoId: s.tecnicoId,
+    titulo: s.titulo,
+    montoVisita: visitPaidOf(s),
+    montoReparacion: costoFinal,
+    estado: 'pendiente',
+    createdAt: now(),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Quotations
@@ -233,6 +260,7 @@ export const serviceWorkAction = onCall<{ servicioId?: string; accion?: string }
         tx.update(db.collection('users').doc(uid), {
           serviciosCompletados: FieldValue.increment(1),
         });
+        flagCoveredByVisit(tx, s.id, s.data, s.data.costoFinal as number);
       }
       const mensaje = !close
         ? WORK_MESSAGES[accion](s.data)
@@ -324,6 +352,9 @@ export const respondStop = onCall<{ servicioId?: string; respuesta?: string; com
           'detencion.respuestaCliente': 'aceptada',
           updatedAt: now(),
         });
+        if (close.cierre === 'cubierto_por_visita') {
+          flagCoveredByVisit(tx, s.id, s.data, close.costoFinal ?? 0);
+        }
         systemMessage(
           tx,
           s.id,
@@ -402,7 +433,17 @@ export const adminResolveDispute = onCall<{ servicioId?: string; monto?: number;
     });
 
     // 2. Refund outside the transaction (idempotency key in refundVisit).
-    if (pre.close.refund > 0) await refundVisit(pre.data.visita.paymentIntentId, pre.close.refund);
+    if (pre.close.refund > 0) {
+      await refundVisit(pre.data.visita.paymentIntentId, pre.close.refund);
+      // Partial refund of an invoiced visit: a nota de crédito for the amount
+      // returned, related to that CFDI (accountant, 2026-09-23).
+      await cfdiSafely('nota_credito', servicioId as string, () => emitCreditNote({
+        servicioId: servicioId as string,
+        concepto: 'visita',
+        importeMxn: pre.close.refund,
+        motivo: 'resolución de ServiTec',
+      }));
+    }
 
     // 3. Commit.
     return db.runTransaction(async (tx) => {
@@ -417,6 +458,9 @@ export const adminResolveDispute = onCall<{ servicioId?: string; monto?: number;
         resolucion: { monto: round2(monto), reembolso: close.refund, nota, adminUid: uid, resueltoAt: now() },
         updatedAt: now(),
       });
+      if (close.cierre === 'cubierto_por_visita' && close.refund === 0) {
+        flagCoveredByVisit(tx, s.id, s.data, close.costoFinal ?? 0);
+      }
       const detalle = close.refund > 0
         ? `ServiTec resolvió el caso: monto final ${fmtMxn(monto)}; se reembolsarán ${fmtMxn(close.refund)} de la visita.`
         : close.costoFinal != null
