@@ -64,6 +64,16 @@ jobs:
     env:
       TARGET: ${{ inputs.target }}
       IS_DEV: ${{ inputs.target == 'servitec-dev-586f6' }}
+      # Every function the app calls directly (callables + HTTP endpoints),
+      # by Cloud Run service name. Triggers and crons are not in the list:
+      # they must stay private.
+      APP_FUNCTIONS: >-
+        setuptechnicianfiscal createpaymentintent
+        createtechnicianconnectonboardinglink gettechnicianconnectstatus
+        onpaymentsucceededstripewebhook sendadminbroadcast
+        admingetaccountstatus adminreleasephone submitquotation
+        respondquotation serviceworkaction stopwork respondstop
+        adminresolvedispute visitaction
 
     steps:
       - name: Guard production deploys
@@ -178,6 +188,45 @@ jobs:
             exit 1
           fi
           echo "All requested functions deployed."
+
+      - name: Let the app reach its functions
+        # The callables and the two HTTP endpoints must be invokable by anyone
+        # at the Cloud Run level: Google checks this before our code runs, and
+        # our code then checks the Firebase login, the verified email and the
+        # role on every call. firebase-tools grants it only when it *creates* a
+        # function, so functions created while IAM was still failing on the
+        # first dev deploy never got it, and every call from the app was
+        # refused with a 403 before reaching our code (found 2026-09-28: 9 of
+        # 15). Granting it on every deploy keeps that from happening quietly.
+        # The deploy service account holds Cloud Run Admin for this.
+        if: contains(inputs.only, 'functions')
+        run: |
+          gcloud auth activate-service-account --key-file="$RUNNER_TEMP/gcp-key.json" --quiet
+          for fn in $APP_FUNCTIONS; do
+            gcloud run services add-iam-policy-binding "$fn" \
+              --region us-central1 --project "$TARGET" \
+              --member=allUsers --role=roles/run.invoker --quiet >/dev/null
+            echo "public invoker: $fn"
+          done
+
+      - name: Check every app-facing function answers
+        # A call without a login must reach our code and be refused by it
+        # (400/401/405), never by Google (403) — a 403 here means the app
+        # cannot use that function at all.
+        if: contains(inputs.only, 'functions')
+        run: |
+          failed=0
+          for fn in $APP_FUNCTIONS; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+              -H 'Content-Type: application/json' -d '{"data":{}}' \
+              "https://us-central1-$TARGET.cloudfunctions.net/$fn")
+            echo "$fn: $code"
+            if [ "$code" = "403" ] || [ "$code" = "404" ] || [ "$code" -ge 500 ]; then
+              echo "::error::$fn is not reachable from the app (HTTP $code)."
+              failed=1
+            fi
+          done
+          exit $failed
 
       - name: Provision the admin account
         # Admin accounts cannot be created from the app: firestore.rules forbid
