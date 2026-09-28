@@ -417,11 +417,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   size: 20,
                                 ),
                               ),
-                              validator: (v) {
-                                if (v == null || v.isEmpty) return 'Requerido';
-                                if (v.length < 6) return 'M\u00ednimo 6 caracteres';
-                                return null;
-                              },
+                              validator: RegistrationValidators.newPassword,
                             ),
 
                             const SizedBox(height: 16),

@@ -290,6 +290,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         if (value == null || value.isEmpty) {
                                           return 'Ingresa tu contraseña';
                                         }
+                                        // 6, not the new-password minimum of
+                                        // 8: accounts created before the
+                                        // password policy may use 6.
                                         if (value.length < 6) {
                                           return 'Mínimo 6 caracteres';
                                         }

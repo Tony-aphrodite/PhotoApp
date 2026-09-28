@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../core/utils/registration_validators.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
@@ -212,7 +213,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       case 'email-already-in-use':
         return 'Este correo ya está registrado. Inicia sesión o usa otro correo.';
       case 'weak-password':
-        return 'La contraseña debe tener al menos 6 caracteres';
+      // Returned when the console's password policy rejects a new password.
+      case 'password-does-not-meet-requirements':
+        return 'La contraseña debe tener al menos '
+            '${RegistrationValidators.minPasswordLength} caracteres';
       case 'invalid-email':
         return 'Correo electrónico inválido';
       case 'user-disabled':

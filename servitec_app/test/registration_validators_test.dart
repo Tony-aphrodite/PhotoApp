@@ -60,4 +60,19 @@ void main() {
       expect(RegistrationValidators.name('   '), isNotNull);
     });
   });
+
+  group('newPassword', () {
+    test('matches the console password policy: at least 8 characters', () {
+      expect(RegistrationValidators.minPasswordLength, 8);
+      expect(RegistrationValidators.newPassword('1234567'), isNotNull);
+      expect(RegistrationValidators.newPassword('12345678'), isNull);
+      expect(RegistrationValidators.newPassword('una frase larga'), isNull);
+    });
+
+    test('asks for length, not for symbols or capitals', () {
+      expect(RegistrationValidators.newPassword('todominusculas'), isNull);
+      expect(RegistrationValidators.newPassword(''), 'Requerido');
+      expect(RegistrationValidators.newPassword(null), 'Requerido');
+    });
+  });
 }

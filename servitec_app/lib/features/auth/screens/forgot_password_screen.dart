@@ -97,7 +97,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                     const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
                     const SizedBox(width: 12),
                     const Expanded(
-                      child: Text('Se envi\u00f3 un correo para recuperar tu contrase\u00f1a'),
+                      // Neutral on purpose: with email-enumeration protection on,
+                      // Firebase answers the same whether the account exists or
+                      // not, so the app must not claim an email went out.
+                      child: Text('Si hay una cuenta con ese correo, te enviamos un enlace para restablecer tu contrase\u00f1a. Revisa tambi\u00e9n la carpeta de spam.'),
                     ),
                   ],
                 ),

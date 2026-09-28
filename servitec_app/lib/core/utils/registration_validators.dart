@@ -62,4 +62,21 @@ class RegistrationValidators {
     if (_letter.allMatches(v).length < 2) return 'Muy corto';
     return null;
   }
+
+  /// Minimum length for a *new* password — the same number as the password
+  /// policy in the Firebase console (Authentication → Settings → Password
+  /// policy), which rejects anything shorter on sign-up. Length rather than
+  /// forced symbols or capitals: it is what actually makes a password harder
+  /// to guess, and what people can remember.
+  ///
+  /// Only for creating a password. Accounts made before the policy may have a
+  /// 6-character one, so the login form must not apply this.
+  static const int minPasswordLength = 8;
+
+  static String? newPassword(String? value) {
+    final v = value ?? '';
+    if (v.isEmpty) return 'Requerido';
+    if (v.length < minPasswordLength) return 'Mínimo $minPasswordLength caracteres';
+    return null;
+  }
 }
