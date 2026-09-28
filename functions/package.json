@@ -13,7 +13,7 @@
     "test": "tsc && node --test lib/lib/*.test.js"
   },
   "engines": {
-    "node": "24"
+    "node": "22"
   },
   "main": "lib/index.js",
   "dependencies": {
