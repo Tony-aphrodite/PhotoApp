@@ -65,15 +65,16 @@ jobs:
       TARGET: ${{ inputs.target }}
       IS_DEV: ${{ inputs.target == 'servitec-dev-586f6' }}
       # Every function the app calls directly (callables + HTTP endpoints),
-      # by Cloud Run service name. Triggers and crons are not in the list:
-      # they must stay private.
+      # as exported. The Cloud Run service is the same name in lower case;
+      # the cloudfunctions.net URL keeps the case. Triggers and crons are not
+      # in the list: they must stay private.
       APP_FUNCTIONS: >-
-        setuptechnicianfiscal createpaymentintent
-        createtechnicianconnectonboardinglink gettechnicianconnectstatus
-        onpaymentsucceededstripewebhook sendadminbroadcast
-        admingetaccountstatus adminreleasephone submitquotation
-        respondquotation serviceworkaction stopwork respondstop
-        adminresolvedispute visitaction
+        setupTechnicianFiscal createPaymentIntent
+        createTechnicianConnectOnboardingLink getTechnicianConnectStatus
+        onPaymentSucceededStripeWebhook sendAdminBroadcast
+        adminGetAccountStatus adminReleasePhone submitQuotation
+        respondQuotation serviceWorkAction stopWork respondStop
+        adminResolveDispute visitAction
 
     steps:
       - name: Guard production deploys
@@ -203,7 +204,7 @@ jobs:
         run: |
           gcloud auth activate-service-account --key-file="$RUNNER_TEMP/gcp-key.json" --quiet
           for fn in $APP_FUNCTIONS; do
-            gcloud run services add-iam-policy-binding "$fn" \
+            gcloud run services add-iam-policy-binding "${fn,,}" \
               --region us-central1 --project "$TARGET" \
               --member=allUsers --role=roles/run.invoker --quiet >/dev/null
             echo "public invoker: $fn"
