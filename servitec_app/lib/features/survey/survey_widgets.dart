@@ -16,12 +16,15 @@ class SurveyButton extends StatelessWidget {
 
   const SurveyButton({super.key, required this.user});
 
+  String get _rol =>
+      user.isTechnician ? SurveyRepository.rolTecnico : SurveyRepository.rolCliente;
+
   Future<void> _open(BuildContext context, String template) async {
     final info = await PackageInfo.fromPlatform();
     final uri = SurveyRepository.buildUri(
       template,
       codigo: TesterIdentity.codeFor(user.uid),
-      rol: user.isTechnician ? 'tecnico' : 'cliente',
+      rol: _rol,
       version: '${info.version}+${info.buildNumber}',
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -37,7 +40,7 @@ class SurveyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     if (user.isAdmin) return const SizedBox.shrink();
     return StreamBuilder<String?>(
-      stream: context.read<SurveyRepository>().watchLink(),
+      stream: context.read<SurveyRepository>().watchLink(_rol),
       builder: (context, snap) {
         final link = snap.data;
         if (link == null) return const SizedBox.shrink();
@@ -86,18 +89,39 @@ class SurveyButton extends StatelessWidget {
   }
 }
 
-/// Admin dialog to paste, replace or remove the survey link.
+/// Admin dialog to paste, replace or remove the two survey links.
 Future<void> configureSurveyLink(BuildContext context) async {
   final repo = context.read<SurveyRepository>();
-  final current = await repo.watchLink().first;
+  final current = await repo.fetchLinks();
   if (!context.mounted) return;
-  final controller = TextEditingController(text: current ?? '');
+  final cliente = TextEditingController(text: current.cliente);
+  final tecnico = TextEditingController(text: current.tecnico);
   final formKey = GlobalKey<FormState>();
 
-  final result = await showDialog<String>(
+  String? validate(String? v) {
+    final t = v?.trim() ?? '';
+    if (t.isEmpty) return null;
+    return SurveyRepository.isValidLink(t) ? null : 'Debe ser un enlace de Google Forms';
+  }
+
+  Widget field(String label, TextEditingController c) => Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: TextFormField(
+          controller: c,
+          maxLines: 3,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: 'https://docs.google.com/forms/…',
+            border: const OutlineInputBorder(),
+          ),
+          validator: validate,
+        ),
+      );
+
+  final saved = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text('Encuesta de prueba',
+      title: Text('Encuestas de prueba',
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
       content: Form(
         key: formKey,
@@ -107,28 +131,17 @@ Future<void> configureSurveyLink(BuildContext context) async {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'En Google Forms, abre ⋮ → "Obtener enlace prellenado" y escribe '
-                'CODIGO, ROL y VERSION en las tres preguntas de datos. Pega aquí '
-                'el enlace que genera. Déjalo vacío para ocultar el botón.',
+                'Cada rol ve solo su encuesta en el perfil. Deja un campo vacío '
+                'para ocultar ese botón.\n\nPara saber quién respondió y con qué '
+                'versión: en Google Forms abre ⋮ → "Obtener enlace prellenado", '
+                'escribe CODIGO, ROL y VERSION en tres preguntas de respuesta corta '
+                'y pega aquí ese enlace. La app los reemplaza por el código del '
+                'tester (nunca su correo), su rol y la versión.',
                 style: GoogleFonts.plusJakartaSans(
                     fontSize: 13, height: 1.5, color: AppTheme.textSecondary),
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: controller,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  hintText: 'https://docs.google.com/forms/…',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final t = v?.trim() ?? '';
-                  if (t.isEmpty) return null;
-                  return SurveyRepository.isValidTemplate(t)
-                      ? null
-                      : 'El enlace debe ser de Google Forms e incluir CODIGO, ROL y VERSION';
-                },
-              ),
+              field('Encuesta para clientes', cliente),
+              field('Encuesta para técnicos', tecnico),
             ],
           ),
         ),
@@ -138,23 +151,24 @@ Future<void> configureSurveyLink(BuildContext context) async {
             onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
         ElevatedButton(
           onPressed: () {
-            if (formKey.currentState!.validate()) {
-              Navigator.pop(ctx, controller.text.trim());
-            }
+            if (formKey.currentState!.validate()) Navigator.pop(ctx, true);
           },
           child: const Text('Guardar'),
         ),
       ],
     ),
   );
-  if (result == null || !context.mounted) return;
+  if (saved != true || !context.mounted) return;
   final messenger = ScaffoldMessenger.of(context);
   try {
-    await repo.saveLink(result);
+    await repo.saveLinks(cliente: cliente.text, tecnico: tecnico.text);
+    final sinCodigo = [cliente.text, tecnico.text]
+        .where((l) => l.trim().isNotEmpty && !SurveyRepository.hasPlaceholders(l))
+        .isNotEmpty;
     messenger.showSnackBar(SnackBar(
-      content: Text(result.isEmpty
-          ? 'Encuesta desactivada.'
-          : 'Encuesta guardada. Los testers ya ven el botón en su perfil.'),
+      content: Text(sinCodigo
+          ? 'Encuestas guardadas. Aviso: sin CODIGO/ROL/VERSION no se podrá saber qué tester respondió.'
+          : 'Encuestas guardadas. Los testers ya ven el botón en su perfil.'),
       backgroundColor: AppTheme.successColor,
     ));
   } catch (e) {
