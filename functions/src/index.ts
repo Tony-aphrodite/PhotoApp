@@ -28,7 +28,7 @@ export { sendAdminBroadcast } from './admin-broadcast';
 export { monthlyCommissionCron } from './monthly-commission-cron';
 export { gracePeriodDailyCron } from './grace-period-cron';
 export { appointmentReminderCron } from './appointment-reminder-cron';
-export { unverifiedAccountCleanupCron, onAuthUserDeleted } from './account-hygiene';
+export { unverifiedAccountCleanupCron } from './account-hygiene';
 export { adminGetAccountStatus, adminReleasePhone } from './admin-accounts';
 export {
   submitQuotation,

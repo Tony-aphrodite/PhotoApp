@@ -3,22 +3,23 @@
  *
  * Registration claims a phone number without proving the registrant owns it
  * (that would take SMS). So someone can sign up with another person's number,
- * never verify the email, and the rightful owner could never register. Two
- * jobs close that:
+ * never verify the email, and the rightful owner could never register.
  *
  *   unverifiedAccountCleanupCron — daily, deletes accounts that never
  *     verified their email within UNVERIFIED_GRACE_DAYS and never did
- *     anything, releasing their phone number.
- *   onAuthUserDeleted — whenever an Auth user is deleted by any route
- *     (this cron, the Firebase console, the Admin SDK), releases its claim.
- *     Without it, deleting an account in the console left the number
- *     blocked forever.
+ *     anything, releasing their phone number itself.
  *
- * A number squatted by an account that *did* verify an email is released by
- * an admin from the panel (adminReleasePhone).
+ * Any other number — one held by an account that did verify, or by an account
+ * an admin deleted in the Firebase console — is released from the admin panel
+ * (adminReleasePhone), which finds the claim by uid, so it works even after
+ * the Auth user is gone.
+ *
+ * There used to be an Auth onDelete trigger for the console case. Auth
+ * deletion triggers exist only in 1st-gen functions, which stop at Node 22,
+ * are being phased out by Google, and whose update timed out the deploy
+ * (2026-09-28); the panel button covers the same case.
  */
 
-import * as functionsV1 from 'firebase-functions/v1';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db, admin } from './lib/admin';
 import { releasePhoneClaimsOf } from './lib/phone-claims';
@@ -89,14 +90,3 @@ export const unverifiedAccountCleanupCron = onSchedule(
   },
 );
 
-// Auth deletion triggers exist only in the 1st-gen API.
-export const onAuthUserDeleted = functionsV1
-  .region('us-central1')
-  .auth.user()
-  .onDelete(async (user) => {
-    const released = await releasePhoneClaimsOf(user.uid);
-    if (released.length) {
-      // eslint-disable-next-line no-console
-      console.log(`Released phone claim(s) ${released.join(', ')} of deleted user ${user.uid}`);
-    }
-  });
