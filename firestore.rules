@@ -29,7 +29,10 @@ service cloud.firestore {
               // el tipo de flujo y el precio de la visita salen de la
               // configuración de la categoría, no del cliente.
               'flujo', 'visita', 'autoCierre', 'revisionAt', 'revisionTarea',
-              'cierre', 'montoSaldo'];
+              'cierre', 'montoSaldo',
+              // Orden de pago abierta en Stripe; la reutiliza el servidor para
+              // que un reintento no cree una nueva (create-payment-intent.ts).
+              'pagoIntentId'];
     }
 
     function getUserRole() {
@@ -46,6 +49,17 @@ service cloud.firestore {
 
     function isTecnico() {
       return isAuthenticated() && getUserRole() == 'tecnico';
+    }
+
+    // Un cliente no puede crear solicitudes en ráfaga. El servidor sella
+    // users/{uid}.ultimaSolicitudAt en cada alta (service-lifecycle.ts) y aquí
+    // se exige que hayan pasado 30 segundos. Deshabilitar el botón en la app
+    // evita el doble toque; esto evita el script que llama al SDK directo.
+    // El perfil ya se leyó para conocer el rol, así que no cuesta otra lectura.
+    function solicitudPermitida() {
+      let ultima = get(/databases/$(database)/documents/users/$(request.auth.uid))
+          .data.get('ultimaSolicitudAt', null);
+      return ultima == null || request.time > ultima + duration.value(30, 's');
     }
 
     // ===== USERS COLLECTION =====
@@ -104,7 +118,10 @@ service cloud.firestore {
             'stripeConnectAccountId',
             // Contadores de incidencias del técnico (no se presentó,
             // canceló, detuvo un trabajo); solo los escribe el servidor.
-            'incidencias'
+            'incidencias',
+            // Sello de la última solicitud creada; es lo que hace cumplir el
+            // límite de altas en ráfaga, así que el cliente no puede tocarlo.
+            'ultimaSolicitudAt'
           ]);
 
       allow delete: if isAdmin();
@@ -147,6 +164,7 @@ service cloud.firestore {
       // Cloud Functions — nunca el cliente, que es quien paga. createPaymentIntent
       // cobra a partir de costoFinal cuando no hay cotización aprobada.
       allow create: if isAuthenticated() && isVerified() && (isCliente() || isAdmin()) &&
+                      (isAdmin() || solicitudPermitida()) &&
                       (isAdmin() || !request.resource.data.keys().hasAny(serverMoneyFields())) &&
                       request.resource.data.estado == 'pendiente' &&
                       request.resource.data.tipoAsignacion in ['cliente', 'automatica', 'admin'];

@@ -36,7 +36,21 @@ class _AdminCategoriesScreenState extends State<AdminCategoriesScreen> {
     _stream = _repo.watch();
   }
 
+  /// Guards against a second tap while the dialog is open or the write is in
+  /// flight — two dialogs on top of each other would save twice.
+  bool _editing = false;
+
   Future<void> _edit(CategoryModel? existing) async {
+    if (_editing) return;
+    _editing = true;
+    try {
+      await _editDialog(existing);
+    } finally {
+      _editing = false;
+    }
+  }
+
+  Future<void> _editDialog(CategoryModel? existing) async {
     final result = await showDialog<CategoryModel>(
       context: context,
       builder: (_) => _CategoryDialog(existing: existing),

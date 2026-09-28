@@ -106,6 +106,12 @@ jobs:
           STRIPE_PLATFORM_ACCOUNT_ID=${{ secrets.STRIPE_PLATFORM_ACCOUNT_ID }}
           FACTURAPI_API_KEY=${{ secrets.FACTURAPI_API_KEY }}
           FACTURAPI_SERVITEC_ORG_ID=${{ secrets.FACTURAPI_SERVITEC_ORG_ID }}
+          # Anti-abuse. App Check enforcement stays off until the app ships
+          # through Google Play — Play Integrity cannot attest a sideloaded
+          # build, so enforcing now would lock the testers out. Set the
+          # APP_CHECK_ENFORCE repository variable to 'true' to turn it on.
+          APP_CHECK_ENFORCE=${{ vars.APP_CHECK_ENFORCE || 'false' }}
+          RATE_LIMIT_SCALE=1
           PLATFORM_COMMISSION_PCT=12
           EOF
 

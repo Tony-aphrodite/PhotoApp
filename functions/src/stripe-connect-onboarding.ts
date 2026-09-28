@@ -14,6 +14,8 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from './lib/admin';
+import { CALLABLE_OPTS } from './lib/callable-options';
+import { rateLimit } from './lib/rate-limit';
 import { stripe } from './lib/stripe';
 
 interface Input {
@@ -30,7 +32,7 @@ const DEFAULT_REFRESH_URL = 'servitec://stripe/refresh';
 const DEFAULT_RETURN_URL = 'servitec://stripe/return';
 
 export const createTechnicianConnectOnboardingLink = onCall<Input>(
-  { region: 'us-central1', memory: '256MiB' },
+  CALLABLE_OPTS,
   async (req) => {
     const uid = req.auth?.uid;
     if (!uid) {
@@ -50,6 +52,8 @@ export const createTechnicianConnectOnboardingLink = onCall<Input>(
     if (user.rol !== 'tecnico') {
       throw new HttpsError('permission-denied', 'Solo técnicos.');
     }
+    // Each call reaches Stripe; a loop here would burn our API quota.
+    rateLimit(uid, 'externo');
 
     let connectedAccountId: string | undefined = user.stripeConnectAccountId;
 
@@ -90,7 +94,7 @@ export const createTechnicianConnectOnboardingLink = onCall<Input>(
  * bank account" or "You're all set".
  */
 export const getTechnicianConnectStatus = onCall(
-  { region: 'us-central1', memory: '256MiB' },
+  CALLABLE_OPTS,
   async (req) => {
     const uid = req.auth?.uid;
     if (!uid) {
@@ -102,6 +106,9 @@ export const getTechnicianConnectStatus = onCall(
     if (!accountId) {
       return { status: 'not_started' };
     }
+    // Reaches Stripe. The screen asks on open and when coming back from
+    // onboarding, so this uses the ordinary quota, not the onboarding one.
+    rateLimit(uid, 'flow');
     const account = await stripe.accounts.retrieve(accountId);
     return {
       status: account.details_submitted ? 'active' : 'incomplete',

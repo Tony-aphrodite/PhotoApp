@@ -128,6 +128,16 @@ export const onServiceCreated = onDocumentCreated(
     // The flow (standard or with a paid diagnostic visit) and the visit fee
     // come from the category config — set here, server-side, so the cliente
     // cannot choose a cheaper flow. categoryFlow() is cached per instance.
+    // Stamp the cliente's profile: firestore.rules reads it to refuse another
+    // request within 30 seconds (see solicitudPermitida). One write, on the
+    // document the rules already load.
+    const clienteId = service.clienteId as string | undefined;
+    if (clienteId) {
+      await db.collection('users').doc(clienteId)
+        .update({ ultimaSolicitudAt: FieldValue.serverTimestamp() })
+        .catch(() => undefined);
+    }
+
     const cat = await categoryFlow(categoria);
     const diag = cat.flujo === FLUJO.diagnostico;
     const flowFields = diag

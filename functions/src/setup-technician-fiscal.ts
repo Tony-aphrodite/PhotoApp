@@ -18,6 +18,8 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { callableOpts } from './lib/callable-options';
+import { rateLimit } from './lib/rate-limit';
 import { db, admin, FieldValue, Timestamp } from './lib/admin';
 import { facturapiParent } from './lib/facturapi';
 
@@ -32,7 +34,7 @@ interface SetupTechnicianFiscalInput {
 }
 
 export const setupTechnicianFiscal = onCall<SetupTechnicianFiscalInput>(
-  { region: 'us-central1', memory: '512MiB' },
+  callableOpts({ memory: '512MiB' as const }),
   async (req) => {
     const uid = req.auth?.uid;
     if (!uid) {
@@ -43,6 +45,8 @@ export const setupTechnicianFiscal = onCall<SetupTechnicianFiscalInput>(
     if (req.auth?.token.email_verified !== true) {
       throw new HttpsError('failed-precondition', 'Verifica tu correo antes de continuar.');
     }
+    // FacturAPI creates a real organization per técnico; one call is enough.
+    rateLimit(uid, 'externo');
 
     const {
       rfc,

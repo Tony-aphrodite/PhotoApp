@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_action.dart';
 import '../../../core/utils/contact_info_filter.dart';
 import '../../../data/models/message_model.dart';
 import '../../../data/repositories/service_repository.dart';
@@ -28,6 +29,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
   bool _uploadingImage = false;
+  bool _sending = false;
 
   // Lazy loading older messages
   final List<MessageModel> _olderMessages = [];
@@ -66,7 +68,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
+    // The text field is cleared below, so a second tap normally finds nothing
+    // to send; the flag covers the tap that lands while the write is still on
+    // its way.
+    if (_sending) return;
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
 
@@ -91,8 +97,14 @@ class _ChatScreenState extends State<ChatScreen> {
       timestamp: DateTime.now(),
     );
 
-    context.read<ServiceRepository>().sendMessage(widget.serviceId, message);
+    final repo = context.read<ServiceRepository>();
     _messageController.clear();
+    setState(() => _sending = true);
+    try {
+      await repo.sendMessage(widget.serviceId, message);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
     _scrollToBottom();
   }
 
@@ -578,11 +590,13 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
-                        onTap: _sendMessage,
+                        onTap: _sending ? null : _sendMessage,
                         customBorder: const CircleBorder(),
-                        child: const Center(
-                          child: Icon(Icons.send_rounded,
-                              color: Colors.white, size: 22),
+                        child: Center(
+                          child: _sending
+                              ? const ButtonSpinner(color: Colors.white)
+                              : const Icon(Icons.send_rounded,
+                                  color: Colors.white, size: 22),
                         ),
                       ),
                     ),

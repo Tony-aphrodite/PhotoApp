@@ -210,6 +210,28 @@ Variants worth one run each:
 
 ---
 
+## Nota para QA — límites del servidor (nuevo, 2026-09-28)
+
+Los botones que envían información se deshabilitan mientras la petición está en
+curso. Además el servidor tiene sus propios límites, porque deshabilitar un
+botón no impide llamar al backend con un script:
+
+- **"Demasiadas solicitudes seguidas. Espera N segundos"** — no es un error:
+  es el límite por usuario. Llega tras una docena de acciones del flujo en
+  pocos segundos, muchas más de las que hace una persona. Espera lo que dice el
+  mensaje y continúa.
+- **Una solicitud nueva cada 30 segundos por cliente**. Crear dos seguidas es
+  lo que rechaza la regla, no un fallo de la app.
+- **Pagos**: reintentar abre *la misma* orden de pago, no una nueva. Si cierras
+  la hoja de Stripe y vuelves a tocar "Pagar", es correcto ver el mismo monto y
+  que Stripe no acumule intentos.
+- **App Check** está en modo de observación: la app manda su comprobante y el
+  servidor lo registra sin rechazar nada. En las APK de prueba hay que
+  registrar el token de depuración una vez por dispositivo (ver DEPLOY.md 4b);
+  mientras no se haga, todo sigue funcionando igual.
+
+---
+
 ## Test 9b — CFDI in the diagnostic flow (two comprobantes)
 
 The accountant's rules, as implemented. Run this after Test 8f with a técnico

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_action.dart';
 import '../../../core/widgets/service_card.dart';
 import '../../../data/models/user_model.dart';
 
@@ -194,8 +195,8 @@ class AdminValidationScreen extends StatelessWidget {
 class _ValidationCard extends StatefulWidget {
   final UserModel tech;
   final Map<String, dynamic> data;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
 
   const _ValidationCard({
     required this.tech,
@@ -427,9 +428,11 @@ class _ValidationCardState extends State<_ValidationCard> {
                           ),
                           child: Material(
                             color: Colors.transparent,
-                            child: InkWell(
+                            child: AsyncAction(
+                              action: widget.onApprove,
+                              builder: (context, onPressed, busy) => InkWell(
                               borderRadius: BorderRadius.circular(12),
-                              onTap: widget.onApprove,
+                              onTap: onPressed,
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 12),
@@ -437,6 +440,9 @@ class _ValidationCardState extends State<_ValidationCard> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.center,
                                   children: [
+                                    if (busy)
+                                      const ButtonSpinner(color: Colors.white)
+                                    else
                                     const Icon(Icons.check_rounded,
                                         color: Colors.white, size: 18),
                                     const SizedBox(width: 6),
@@ -452,6 +458,7 @@ class _ValidationCardState extends State<_ValidationCard> {
                                   ],
                                 ),
                               ),
+                            ),
                             ),
                           ),
                         ),
@@ -470,9 +477,11 @@ class _ValidationCardState extends State<_ValidationCard> {
                           ),
                           child: Material(
                             color: Colors.transparent,
-                            child: InkWell(
+                            child: AsyncAction(
+                              action: widget.onReject,
+                              builder: (context, onPressed, busy) => InkWell(
                               borderRadius: BorderRadius.circular(12),
-                              onTap: widget.onReject,
+                              onTap: onPressed,
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
                                     vertical: 12),
@@ -480,6 +489,10 @@ class _ValidationCardState extends State<_ValidationCard> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.center,
                                   children: [
+                                    if (busy)
+                                      const ButtonSpinner(
+                                          color: AppTheme.errorColor)
+                                    else
                                     Icon(Icons.close_rounded,
                                         color: AppTheme.errorColor,
                                         size: 18),
@@ -496,6 +509,7 @@ class _ValidationCardState extends State<_ValidationCard> {
                                   ],
                                 ),
                               ),
+                            ),
                             ),
                           ),
                         ),

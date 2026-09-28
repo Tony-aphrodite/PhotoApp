@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_action.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/repositories/config_repository.dart';
 import '../../../core/utils/category_catalog.dart';
@@ -146,9 +147,8 @@ class _AdminTariffsScreenState extends State<AdminTariffsScreen> {
                       ),
                       child: Material(
                         color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () async {
+                        child: AsyncAction(
+                          action: () async {
                             final newBase =
                                 double.tryParse(baseController.text) ??
                                     tarifa.tarifaBase;
@@ -189,16 +189,22 @@ class _AdminTariffsScreenState extends State<AdminTariffsScreen> {
                               );
                             }
                           },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 12),
-                            child: Center(
-                              child: Text(
-                                'Guardar',
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
+                          builder: (context, onPressed, busy) => InkWell(
+                            borderRadius: BorderRadius.circular(12),
+                            onTap: onPressed,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12),
+                              child: Center(
+                                child: busy
+                                    ? const ButtonSpinner(color: Colors.white)
+                                    : Text(
+                                        'Guardar',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                               ),
                             ),
                           ),

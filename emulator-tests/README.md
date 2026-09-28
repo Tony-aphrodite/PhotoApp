@@ -27,7 +27,13 @@ STRIPE_API_PORT=12111
 STRIPE_API_PROTOCOL=http
 FACTURAPI_API_KEY=sk_test_mock
 PLATFORM_COMMISSION_PCT=12
+RATE_LIMIT_SCALE=100
 ```
+
+`RATE_LIMIT_SCALE` lifts the per-caller rate limits (functions/src/lib/
+rate-limit.ts) out of the way: these tests drive a whole service flow in a few
+hundred milliseconds, far faster than a person taps. The limiter's own
+behaviour is covered by `functions/src/lib/rate-limit.test.ts`.
 
 `no-watch.js` disables file watching: on machines where other apps use up the
 inotify instance limit, the emulators otherwise fail with EMFILE.

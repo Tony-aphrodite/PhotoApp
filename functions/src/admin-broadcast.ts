@@ -16,6 +16,8 @@
  */
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { callableOpts } from './lib/callable-options';
+import { rateLimit } from './lib/rate-limit';
 import { db, admin, FieldValue } from './lib/admin';
 import { sendPushToUsers } from './lib/push';
 
@@ -33,7 +35,7 @@ const MAX_RECIPIENTS = 5000;
 const CHUNK = 200;
 
 export const sendAdminBroadcast = onCall<BroadcastInput>(
-  { region: 'us-central1', memory: '256MiB', timeoutSeconds: 300 },
+  callableOpts({ timeoutSeconds: 300 }),
   async (req) => {
     const callerUid = req.auth?.uid;
     if (!callerUid) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
@@ -42,6 +44,7 @@ export const sendAdminBroadcast = onCall<BroadcastInput>(
     if (caller?.rol !== 'admin') {
       throw new HttpsError('permission-denied', 'Solo administradores.');
     }
+    rateLimit(callerUid, 'admin');
 
     const { audience, title, body, uid } = req.data;
     if (!title?.trim() || !body?.trim()) {

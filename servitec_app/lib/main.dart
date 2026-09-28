@@ -6,6 +6,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'core/services/tester_identity.dart';
@@ -30,6 +31,10 @@ import 'features/auth/bloc/auth_event.dart';
 import 'core/utils/notification_service.dart';
 import 'routes/app_router.dart';
 
+/// Forces the App Check debug provider on a release build, for the test APKs
+/// that testers install outside Google Play.
+const bool _appCheckDebug = bool.fromEnvironment('APP_CHECK_DEBUG');
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -41,6 +46,29 @@ void main() async {
   // Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  // App Check — proves to the backend that a request came from this app on a
+  // genuine device, rather than from a script holding a stolen token. Every
+  // Firebase call (Firestore, Storage, Functions) then carries an attestation
+  // token.
+  //
+  // Play Integrity only attests builds installed from Google Play, so the
+  // debug provider covers development and the sideloaded test APKs: its token
+  // is printed in the log once and registered by hand in the Firebase console
+  // (see DEPLOY.md). Build a test APK with
+  // `--dart-define=APP_CHECK_DEBUG=true`.
+  //
+  // Enforcement is a separate switch, per service, in the Firebase console.
+  // Until the app is published on Play it stays off: tokens are collected and
+  // charted, nothing is rejected.
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: kDebugMode || _appCheckDebug
+        ? AndroidProvider.debug
+        : AndroidProvider.playIntegrity,
+    appleProvider: kDebugMode || _appCheckDebug
+        ? AppleProvider.debug
+        : AppleProvider.deviceCheck,
   );
 
   // Crash reporting. Flutter framework errors and uncaught async errors both

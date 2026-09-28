@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:http/http.dart' as http;
 import '../models/transaction_model.dart';
 import '../../core/constants/app_constants.dart';
@@ -36,11 +37,23 @@ class PaymentRepository {
     final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
     if (idToken == null) throw const PaymentException('Debes iniciar sesión.');
 
+    // Callables get their App Check token from the SDK; a plain HTTPS endpoint
+    // has to be given it. A device that cannot attest (no Play Integrity on a
+    // sideloaded build) simply sends none — the function only requires it once
+    // enforcement is switched on.
+    String? appCheckToken;
+    try {
+      appCheckToken = await FirebaseAppCheck.instance.getToken();
+    } catch (_) {
+      appCheckToken = null;
+    }
+
     final response = await http.post(
       Uri.parse('$_cloudFunctionBaseUrl/createPaymentIntent'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $idToken',
+        'X-Firebase-AppCheck': ?appCheckToken,
       },
       body: jsonEncode({'servicioId': servicioId}),
     );

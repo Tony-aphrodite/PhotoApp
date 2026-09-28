@@ -7,7 +7,7 @@ const {
   initializeTestEnvironment, assertSucceeds, assertFails,
 } = require('@firebase/rules-unit-testing');
 const {
-  doc, setDoc, updateDoc, writeBatch, serverTimestamp,
+  doc, setDoc, updateDoc, writeBatch, serverTimestamp, Timestamp,
 } = require('firebase/firestore');
 
 let env;
@@ -49,6 +49,20 @@ test('cliente cannot create a service carrying server fields', async () => {
   await assertSucceeds(setDoc(doc(db, 'servicios/n1'), base));
   await assertFails(setDoc(doc(db, 'servicios/n2'), { ...base, flujo: 'estandar' }));
   await assertFails(setDoc(doc(db, 'servicios/n3'), { ...base, costoFinal: 5 }));
+});
+
+test('a cliente cannot create requests in bursts', async () => {
+  const db = verified('cli');
+  const base = { clienteId: 'cli', estado: 'pendiente', tipoAsignacion: 'automatica' };
+  const stamp = async (ms) => env.withSecurityRulesDisabled((ctx) =>
+    setDoc(doc(ctx.firestore(), 'users/cli'),
+      { rol: 'cliente', activo: true, telefono: '5511111111', ultimaSolicitudAt: Timestamp.fromMillis(ms) }));
+
+  // The server stamps the profile on every request it processes.
+  await stamp(Date.now());
+  await assertFails(setDoc(doc(db, 'servicios/burst1'), base), 'second request within 30 s');
+  await stamp(Date.now() - 31 * 1000);
+  await assertSucceeds(setDoc(doc(db, 'servicios/burst2'), base));
 });
 
 test('direct cancel: allowed for standard flow, refused for diagnostic', async () => {

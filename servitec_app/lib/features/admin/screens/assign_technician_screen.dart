@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/async_action.dart';
 import '../../../data/models/user_model.dart';
 import '../../../data/models/service_model.dart';
 import '../../../data/repositories/account_admin_repository.dart';
@@ -416,7 +417,7 @@ class AssignTechnicianScreen extends StatelessWidget {
 
 class _TechnicianCard extends StatelessWidget {
   final UserModel technician;
-  final VoidCallback onAssign;
+  final Future<void> Function() onAssign;
   final bool unverified;
   final bool sinCuentaPagos;
 
@@ -605,15 +606,19 @@ class _TechnicianCard extends StatelessWidget {
                 ),
                 child: Material(
                   color: Colors.transparent,
-                  child: InkWell(
+                  child: AsyncAction(
+                    action: onAssign,
+                    builder: (context, onPressed, busy) => InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: onAssign,
+                    onTap: onPressed,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 10,
                       ),
-                      child: Text(
+                      child: busy
+                          ? const ButtonSpinner(color: Colors.white, size: 15)
+                          : Text(
                         'Asignar',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
@@ -622,6 +627,7 @@ class _TechnicianCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                  ),
                   ),
                 ),
               ),

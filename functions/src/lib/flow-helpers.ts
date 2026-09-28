@@ -7,21 +7,28 @@
 import { HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { db, admin, FieldValue } from './admin';
 import { FlowError } from './service-flow-rules';
+import { CALLABLE_OPTS } from './callable-options';
+import { rateLimit } from './rate-limit';
 
 export type Tx = FirebaseFirestore.Transaction;
 export type Data = FirebaseFirestore.DocumentData;
 export type WriteTarget = Tx | FirebaseFirestore.WriteBatch;
 
-export const OPTS = { region: 'us-central1', memory: '256MiB' as const };
+export const OPTS = CALLABLE_OPTS;
 export const now = () => FieldValue.serverTimestamp();
 
-/** Signed in with a verified email; returns the uid. */
-export function requireVerified(req: CallableRequest<unknown>): string {
+/**
+ * Signed in with a verified email, and within their rate limit; returns the
+ * uid. Disabling the button in the app stops the honest double tap; this stops
+ * the script that calls the endpoint directly.
+ */
+export function requireVerified(req: CallableRequest<unknown>, action = 'flow'): string {
   const uid = req.auth?.uid;
   if (!uid) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
   if (req.auth?.token.email_verified !== true) {
     throw new HttpsError('failed-precondition', 'Verifica tu correo antes de continuar.');
   }
+  rateLimit(uid, action);
   return uid;
 }
 

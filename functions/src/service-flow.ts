@@ -44,6 +44,7 @@ import {
 import { FLUJO, finalClose, remainingAfterVisit, visitPaidOf } from './lib/visit-rules';
 import { incidentUpdate, refundVisit, scheduleFor } from './lib/visit-store';
 import { cfdiSafely, emitCreditNote } from './lib/cfdi';
+import { rateLimit } from './lib/rate-limit';
 
 /**
  * The repair ended up costing no more than the diagnostic visit, so the client
@@ -410,6 +411,7 @@ export const adminResolveDispute = onCall<{ servicioId?: string; monto?: number;
     const uid = req.auth?.uid;
     if (!uid) throw new HttpsError('unauthenticated', 'Debes iniciar sesión.');
     if (!(await isAdminUid(uid))) throw new HttpsError('permission-denied', 'Solo administradores.');
+    rateLimit(uid, 'admin');
 
     const monto = req.data?.monto;
     const nota = typeof req.data?.nota === 'string' ? req.data.nota.trim().slice(0, 1000) : '';

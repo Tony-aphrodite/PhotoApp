@@ -22,6 +22,8 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { db, admin } from './lib/admin';
 import { stripe, applicationFeeCentavos } from './lib/stripe';
 import { remainingAfterVisit, visitPaidOf } from './lib/visit-rules';
+import { APP_CHECK_ENFORCED } from './lib/callable-options';
+import { rateLimitOk } from './lib/rate-limit';
 
 interface CreatePaymentIntentBody {
   servicioId?: string;
@@ -51,12 +53,48 @@ function serviceAmountCentavos(service: FirebaseFirestore.DocumentData): number 
   return Math.round(mxn * 100);
 }
 
+/**
+ * The PaymentIntent of a previous attempt, when it can still be paid and is
+ * for the same service, amount and técnico. Anything else (already paid,
+ * cancelled, stale amount after a revised quotation) returns null so a fresh
+ * one is created.
+ */
+async function reusableIntent(
+  id: string | undefined,
+  expected: { amount: number; connectedAccountId: string; servicioId: string },
+) {
+  if (!id) return null;
+  try {
+    const pi = await stripe.paymentIntents.retrieve(id);
+    const open = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+    if (!open.includes(pi.status)) return null;
+    if (pi.amount !== expected.amount) return null;
+    if (pi.metadata?.servicioId !== expected.servicioId) return null;
+    if (pi.transfer_data?.destination !== expected.connectedAccountId) return null;
+    return pi;
+  } catch {
+    return null;
+  }
+}
+
 export const createPaymentIntent = onRequest(
   { region: 'us-central1', memory: '256MiB', cors: true },
   async (req, res) => {
     if (req.method !== 'POST') {
       res.status(405).send('Method not allowed');
       return;
+    }
+
+    // App Check: a callable gets this from the SDK, a plain endpoint has to
+    // ask for it. Off until the app ships through Google Play — see
+    // lib/callable-options.ts.
+    if (APP_CHECK_ENFORCED) {
+      try {
+        await admin.appCheck().verifyToken(req.get('X-Firebase-AppCheck') ?? '');
+      } catch {
+        res.status(401).json({ error: 'Solicitud no verificada.', code: 'app_check_failed' });
+        return;
+      }
     }
 
     // A plain HTTPS function has no built-in auth, so verify the Firebase ID
@@ -72,6 +110,18 @@ export const createPaymentIntent = onRequest(
     }
     if (!token.email_verified) {
       res.status(403).json({ error: 'Verifica tu correo antes de pagar.', code: 'email_not_verified' });
+      return;
+    }
+
+    // Every call below reaches Stripe. The app disables its button while a
+    // payment is in flight; this bounds what a script can do.
+    const limit = rateLimitOk(token.uid, 'pago');
+    if (!limit.ok) {
+      res.set('Retry-After', String(limit.retryAfterSeconds));
+      res.status(429).json({
+        error: `Demasiados intentos de pago seguidos. Espera ${limit.retryAfterSeconds} segundos.`,
+        code: 'rate_limited',
+      });
       return;
     }
 
@@ -135,6 +185,26 @@ export const createPaymentIntent = onRequest(
 
       const feeCentavos = applicationFeeCentavos(amount);
 
+      // Reuse the PaymentIntent of an attempt the cliente abandoned (closed the
+      // sheet, lost signal, tapped twice). Stripe keeps it usable until it is
+      // confirmed, so paying twice is impossible and a retry does not leave a
+      // trail of open intents behind.
+      const openIntent = await reusableIntent(
+        service.pagoIntentId as string | undefined,
+        { amount, connectedAccountId, servicioId },
+      );
+      if (openIntent) {
+        res.status(200).json({
+          clientSecret: openIntent.client_secret,
+          paymentIntentId: openIntent.id,
+          amount,
+          applicationFeeAmount: feeCentavos,
+          currency,
+          reused: true,
+        });
+        return;
+      }
+
       const paymentIntent = await stripe.paymentIntents.create({
         amount,
         currency,
@@ -154,6 +224,8 @@ export const createPaymentIntent = onRequest(
           concepto: visitPaidOf(service) > 0 ? 'saldo' : 'servicio',
         },
       });
+
+      await serviceSnap.ref.update({ pagoIntentId: paymentIntent.id });
 
       res.status(200).json({
         clientSecret: paymentIntent.client_secret,

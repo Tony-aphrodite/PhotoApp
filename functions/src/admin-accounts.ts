@@ -13,6 +13,8 @@
  */
 
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
+import { CALLABLE_OPTS } from './lib/callable-options';
+import { rateLimit } from './lib/rate-limit';
 import { db, admin, FieldValue } from './lib/admin';
 import { releasePhoneClaimsOf } from './lib/phone-claims';
 
@@ -23,11 +25,12 @@ async function requireAdmin(req: CallableRequest<unknown>): Promise<string> {
   if (caller.get('rol') !== 'admin') {
     throw new HttpsError('permission-denied', 'Solo administradores.');
   }
+  rateLimit(uid, 'admin');
   return uid;
 }
 
 export const adminGetAccountStatus = onCall<{ uids?: string[] }>(
-  { region: 'us-central1', memory: '256MiB' },
+  CALLABLE_OPTS,
   async (req) => {
     await requireAdmin(req);
     const uids = req.data?.uids;
@@ -47,7 +50,7 @@ export const adminGetAccountStatus = onCall<{ uids?: string[] }>(
 );
 
 export const adminReleasePhone = onCall<{ uid?: string }>(
-  { region: 'us-central1', memory: '256MiB' },
+  CALLABLE_OPTS,
   async (req) => {
     const adminUid = await requireAdmin(req);
     const uid = req.data?.uid;

@@ -128,6 +128,52 @@ https://us-central1-servicios-domicilio-mvp.cloudfunctions.net/onPaymentSucceede
 
 ---
 
+## 4b. Anti-abuse: App Check, rate limits and budget alerts
+
+Disabling a button in the app stops the honest double tap. These stop the
+script that calls the backend directly (Daniel's QA note, 2026-09-28).
+
+**a) Register App Check** (Firebase console → **Build → App Check**)
+
+1. Under **Apps**, pick the Android app and register the **Play Integrity**
+   provider. Nothing to paste: Play Integrity uses the app's Play listing.
+2. **Do not switch enforcement on yet.** The console shows, per service
+   (Firestore, Storage, Cloud Functions), how many requests arrive verified.
+   Let it run a few days; enforce only once the app is distributed through
+   Google Play, because Play Integrity cannot attest a sideloaded APK.
+3. For the test builds (installed outside Play), build with
+   `--dart-define=APP_CHECK_DEBUG=true`, run the app once, and copy the debug
+   token it prints in logcat
+   (`adb logcat | grep -i "App Check debug token"`) into the console under
+   **App Check → Apps → ⋮ → Manage debug tokens**. One token per device.
+4. When the app is on Play and the console shows verified traffic, enforce:
+   flip the switch per service, and set `APP_CHECK_ENFORCE=true` in
+   `functions/.env` (Cloud Functions check the token themselves — see
+   `functions/src/lib/callable-options.ts`) and re-deploy the functions.
+
+**b) Rate limits** are already in the code
+(`functions/src/lib/rate-limit.ts`): a per-caller token bucket on every
+callable and on `createPaymentIntent`. Quotas live in that file; leave
+`RATE_LIMIT_SCALE=1` in production. Firestore rules add a 30-second cooldown
+between service requests from the same cliente.
+
+**c) Firebase console → Authentication → Settings**
+
+- Turn on **Email enumeration protection**.
+- Under **reCAPTCHA / Bot protection**, enable protection for sign-in and
+  sign-up (Identity Platform). Start in *audit* mode, then enforce.
+- Raise the **password policy** to at least 8 characters (the app asks for 6
+  today, which is Firebase's default).
+
+**d) Google Cloud console → Billing → Budgets & alerts**
+
+Create a budget for the project with alerts at 50 / 90 / 100 % of the monthly
+expectation, addressed to the developer and to Edgar. Cloud Functions are
+capped at `maxInstances: 20` (`functions/src/index.ts`), which bounds the
+worst case, but the alert is what makes it visible the same day.
+
+---
+
 ## 5. Build the tester APK
 
 ```powershell
