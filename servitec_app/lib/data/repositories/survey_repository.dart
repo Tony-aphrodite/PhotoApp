@@ -10,10 +10,17 @@ import '../../core/constants/app_constants.dart';
 /// the split still works as the link for both.
 ///
 /// A link may be a Google Forms *pre-filled* link in which the form owner
-/// typed the placeholders CODIGO, ROL and VERSION into short-answer fields;
-/// [buildUri] swaps them for the tester's code, role and app version — never
-/// an email or phone number — so an answer can be matched to crash reports.
-/// A link without placeholders opens the form as is.
+/// typed the placeholders CODIGO, ROL, VERSION and ORIGEN into short-answer
+/// fields; [buildUri] swaps them for the tester's code, role, app version and
+/// the build they answered from — never an email or phone number — so an
+/// answer can be matched to crash reports. A link without placeholders opens
+/// the form as is. Values are URL-encoded by [Uri] (a `+` in the version
+/// becomes `%2B`, not a space).
+///
+/// Marketing's forms (2026-10-01) carry the four in a last "Uso interno"
+/// section. Their entry ids differ per form and change if a question is
+/// recreated, so the links are pasted as Google generates them, never
+/// assembled here.
 class SurveyRepository {
   final FirebaseFirestore _firestore;
 
@@ -63,6 +70,8 @@ class SurveyRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
+  /// The three that identify an answer. ORIGEN is filled in when present but
+  /// not required.
   static const placeholders = ['CODIGO', 'ROL', 'VERSION'];
 
   /// Whether [url] is a Google Forms link (placeholders are optional).
@@ -87,6 +96,7 @@ class SurveyRepository {
     required String codigo,
     required String rol,
     required String version,
+    String origen = '',
   }) {
     final uri = Uri.parse(template.trim());
     if (uri.queryParametersAll.isEmpty) return uri;
@@ -97,6 +107,7 @@ class SurveyRepository {
                   'CODIGO' => codigo,
                   'ROL' => rol,
                   'VERSION' => version,
+                  'ORIGEN' => origen,
                   _ => v,
                 })
             .toList(),

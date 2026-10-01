@@ -8,6 +8,7 @@ import '../../core/services/tester_identity.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/survey_repository.dart';
+import '../../firebase_options.dart';
 
 /// "Encuesta de prueba" on the profile screen. Shows only while the admin has
 /// configured a survey link, and never for admins themselves.
@@ -26,6 +27,9 @@ class SurveyButton extends StatelessWidget {
       codigo: TesterIdentity.codeFor(user.uid),
       rol: _rol,
       version: '${info.version}+${info.buildNumber}',
+      // Which build the answer came from: the test-server APK or the one on
+      // the production backend. Same code and version otherwise.
+      origen: isDevBuild ? 'app-android-pruebas' : 'app-android',
     );
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
@@ -134,9 +138,9 @@ Future<void> configureSurveyLink(BuildContext context) async {
                 'Cada rol ve solo su encuesta en el perfil. Deja un campo vacío '
                 'para ocultar ese botón.\n\nPara saber quién respondió y con qué '
                 'versión: en Google Forms abre ⋮ → "Obtener enlace prellenado", '
-                'escribe CODIGO, ROL y VERSION en tres preguntas de respuesta corta '
+                'escribe CODIGO, ROL, VERSION y ORIGEN en las preguntas de uso interno '
                 'y pega aquí ese enlace. La app los reemplaza por el código del '
-                'tester (nunca su correo), su rol y la versión.',
+                'tester (nunca su correo), su rol, la versión y desde qué app respondió.',
                 style: GoogleFonts.plusJakartaSans(
                     fontSize: 13, height: 1.5, color: AppTheme.textSecondary),
               ),
@@ -167,7 +171,7 @@ Future<void> configureSurveyLink(BuildContext context) async {
         .isNotEmpty;
     messenger.showSnackBar(SnackBar(
       content: Text(sinCodigo
-          ? 'Encuestas guardadas. Aviso: sin CODIGO/ROL/VERSION no se podrá saber qué tester respondió.'
+          ? 'Encuestas guardadas. Aviso: sin CODIGO, ROL y VERSION no se podrá saber qué tester respondió.'
           : 'Encuestas guardadas. Los testers ya ven el botón en su perfil.'),
       backgroundColor: AppTheme.successColor,
     ));
