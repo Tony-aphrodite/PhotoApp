@@ -205,19 +205,6 @@ class ServiceRepository {
     );
   }
 
-  // Get pending services (admin)
-  Stream<List<ServiceModel>> getPendingServices() {
-    return _servicesRef
-        .where('estado', isEqualTo: AppConstants.statusPending)
-        .snapshots()
-        .map((snapshot) {
-      final list =
-          snapshot.docs.map((doc) => ServiceModel.fromFirestore(doc)).toList();
-      list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return list;
-    });
-  }
-
   // Update service status with validation
   Future<void> updateServiceStatus(String serviceId, String newStatus) async {
     // Validate transition

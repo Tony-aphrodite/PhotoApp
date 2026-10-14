@@ -26,7 +26,7 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -55,15 +55,20 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
               actions: [
                 IconButton(
                   onPressed: () => context.push('/technician/agenda'),
-                  icon: const Icon(Icons.calendar_month_rounded,
-                      color: Colors.white),
+                  icon: const Icon(
+                    Icons.calendar_month_rounded,
+                    color: Colors.white,
+                  ),
                   tooltip: 'Mi Agenda',
                 ),
               ],
               bottom: PreferredSize(
                 preferredSize: const Size.fromHeight(52),
                 child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 0,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -99,7 +104,6 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
                     isScrollable: true,
                     tabAlignment: TabAlignment.start,
                     tabs: const [
-                      Tab(text: 'Disponibles'),
                       Tab(text: 'Asignados'),
                       Tab(text: 'En Progreso'),
                       Tab(text: 'Completados'),
@@ -173,7 +177,9 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w400,
-                                        color: Colors.white.withValues(alpha: 0.6),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.6,
+                                        ),
                                         letterSpacing: -0.2,
                                       ),
                                     ),
@@ -190,15 +196,13 @@ class _TechnicianHomeScreenState extends State<TechnicianHomeScreen>
                                 iconColor: const Color(0xFFFFD54F),
                                 label:
                                     '${user.calificacionPromedio?.toStringAsFixed(1) ?? '0.0'}',
-                                sublabel:
-                                    '(${user.totalResenas ?? 0} resenas)',
+                                sublabel: '(${user.totalResenas ?? 0} resenas)',
                               ),
                               const SizedBox(width: 12),
                               _HeaderStatChip(
                                 icon: Icons.check_circle_rounded,
                                 iconColor: const Color(0xFF69F0AE),
-                                label:
-                                    '${user.serviciosCompletados ?? 0}',
+                                label: '${user.serviciosCompletados ?? 0}',
                                 sublabel: 'completados',
                               ),
                             ],
@@ -250,35 +254,35 @@ class _FiscalStatusBanner extends StatelessWidget {
 
     final (color, icon, title, ctaLabel, tappable) = switch (display) {
       FiscalDisplay.needsSetup => (
-          AppTheme.warningColor,
-          Icons.info_outline_rounded,
-          daysLeft > 0
-              ? 'Completa tu registro fiscal — ${daysLeft}d restantes'
-              : 'Completa tu registro fiscal',
-          'Iniciar',
-          true,
-        ),
+        AppTheme.warningColor,
+        Icons.info_outline_rounded,
+        daysLeft > 0
+            ? 'Completa tu registro fiscal — ${daysLeft}d restantes'
+            : 'Completa tu registro fiscal',
+        'Iniciar',
+        true,
+      ),
       FiscalDisplay.graceExpired => (
-          AppTheme.errorColor,
-          Icons.error_outline_rounded,
-          'Periodo de gracia expirado. Sube tu CSD para reactivar tu cuenta.',
-          'Datos fiscales',
-          true,
-        ),
+        AppTheme.errorColor,
+        Icons.error_outline_rounded,
+        'Periodo de gracia expirado. Sube tu CSD para reactivar tu cuenta.',
+        'Datos fiscales',
+        true,
+      ),
       FiscalDisplay.suspended => (
-          AppTheme.errorColor,
-          Icons.block_rounded,
-          'Cuenta suspendida por facturación pendiente. Contacta soporte.',
-          null,
-          false,
-        ),
+        AppTheme.errorColor,
+        Icons.block_rounded,
+        'Cuenta suspendida por facturación pendiente. Contacta soporte.',
+        null,
+        false,
+      ),
       FiscalDisplay.active => (
-          AppTheme.successColor,
-          Icons.check_circle_outline,
-          '',
-          null,
-          false,
-        ),
+        AppTheme.successColor,
+        Icons.check_circle_outline,
+        '',
+        null,
+        false,
+      ),
     };
 
     return Container(
@@ -310,7 +314,10 @@ class _FiscalStatusBanner extends StatelessWidget {
               style: TextButton.styleFrom(
                 backgroundColor: color,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 minimumSize: Size.zero,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -343,7 +350,8 @@ class _StripeConnectBanner extends StatelessWidget {
     // they do. Once the account exists, the Stripe screen itself handles
     // the finer states (incomplete / active) via getTechnicianConnectStatus.
     final needsBankAccount =
-        user.stripeConnectAccountId == null || user.stripeConnectAccountId!.isEmpty;
+        user.stripeConnectAccountId == null ||
+        user.stripeConnectAccountId!.isEmpty;
     if (!needsBankAccount) return const SizedBox.shrink();
 
     return Container(
@@ -352,12 +360,17 @@ class _StripeConnectBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.primaryColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppTheme.primaryColor.withValues(alpha: 0.25)),
+        border: Border.all(
+          color: AppTheme.primaryColor.withValues(alpha: 0.25),
+        ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.account_balance_outlined,
-              size: 20, color: AppTheme.primaryColor),
+          const Icon(
+            Icons.account_balance_outlined,
+            size: 20,
+            color: AppTheme.primaryColor,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -399,81 +412,68 @@ class _TechnicianTabBody extends StatelessWidget {
   final TabController tabController;
   final String userId;
 
-  const _TechnicianTabBody({
-    required this.tabController,
-    required this.userId,
-  });
+  const _TechnicianTabBody({required this.tabController, required this.userId});
 
   @override
   Widget build(BuildContext context) {
     final serviceRepo = context.read<ServiceRepository>();
 
+    // Jobs reach a técnico by assignment (automatic when the request is
+    // created, or by an admin), never from an open list: firestore.rules let a
+    // técnico read a service only once it is his. A "Disponibles" tab that
+    // listed every pending request used to sit here; the rules refused that
+    // query, so it was always empty while promising new requests would show.
     return StreamBuilder<List<ServiceModel>>(
-      stream: serviceRepo.getPendingServices(),
-      builder: (context, pendingSnapshot) {
-        return StreamBuilder<List<ServiceModel>>(
-          stream: serviceRepo.getTechnicianServices(userId),
-          builder: (context, mySnapshot) {
-            if ((pendingSnapshot.connectionState == ConnectionState.waiting &&
-                    !pendingSnapshot.hasData) ||
-                (mySnapshot.connectionState == ConnectionState.waiting &&
-                    !mySnapshot.hasData)) {
-              return Center(
-                child: CircularProgressIndicator(
-                  color: AppTheme.primaryColor,
-                  strokeWidth: 2.5,
-                ),
-              );
-            }
+      stream: serviceRepo.getTechnicianServices(userId),
+      builder: (context, mySnapshot) {
+        if (mySnapshot.connectionState == ConnectionState.waiting &&
+            !mySnapshot.hasData) {
+          return Center(
+            child: CircularProgressIndicator(
+              color: AppTheme.primaryColor,
+              strokeWidth: 2.5,
+            ),
+          );
+        }
 
-            final pendingServices = pendingSnapshot.data ?? [];
-            final myServices = mySnapshot.data ?? [];
-            // Tabs follow the stage of the job, so quoting sits with
-            // "Asignados" and a revision or stop with "En Progreso".
-            final assigned = myServices
-                .where((s) => AppConstants.preWorkStates.contains(s.estado))
-                .toList();
-            final inProgress = myServices
-                .where((s) => AppConstants.workStates.contains(s.estado))
-                .toList();
-            final completed = myServices
-                .where((s) => AppConstants.doneStates.contains(s.estado))
-                .toList();
+        final myServices = mySnapshot.data ?? [];
+        // Tabs follow the stage of the job, so quoting sits with
+        // "Asignados" and a revision or stop with "En Progreso".
+        final assigned = myServices
+            .where((s) => AppConstants.preWorkStates.contains(s.estado))
+            .toList();
+        final inProgress = myServices
+            .where((s) => AppConstants.workStates.contains(s.estado))
+            .toList();
+        final completed = myServices
+            .where((s) => AppConstants.doneStates.contains(s.estado))
+            .toList();
 
-            return TabBarView(
-              controller: tabController,
-              children: [
-                _ServiceList(
-                  services: pendingServices,
-                  emptyMessage: 'No hay servicios disponibles',
-                  emptySubMessage:
-                      'Las nuevas solicitudes de clientes apareceran aqui',
-                  emptyIcon: Icons.explore_outlined,
-                ),
-                _ServiceList(
-                  services: assigned,
-                  emptyMessage: 'No tienes servicios asignados',
-                  emptySubMessage:
-                      'Los servicios asignados apareceran aqui',
-                  emptyIcon: Icons.assignment_outlined,
-                ),
-                _ServiceList(
-                  services: inProgress,
-                  emptyMessage: 'No tienes servicios en progreso',
-                  emptySubMessage:
-                      'Acepta un servicio asignado para comenzar a trabajar',
-                  emptyIcon: Icons.engineering_outlined,
-                ),
-                _ServiceList(
-                  services: completed,
-                  emptyMessage: 'Aun no has completado servicios',
-                  emptySubMessage:
-                      'Tu historial de servicios completados aparecera aqui',
-                  emptyIcon: Icons.check_circle_outline,
-                ),
-              ],
-            );
-          },
+        return TabBarView(
+          controller: tabController,
+          children: [
+            _ServiceList(
+              services: assigned,
+              emptyMessage: 'No tienes servicios asignados',
+              emptySubMessage:
+                  'Cuando se te asigne una solicitud de tus especialidades, aparecerá aquí y te llegará una notificación.',
+              emptyIcon: Icons.assignment_outlined,
+            ),
+            _ServiceList(
+              services: inProgress,
+              emptyMessage: 'No tienes servicios en progreso',
+              emptySubMessage:
+                  'Acepta un servicio asignado para comenzar a trabajar',
+              emptyIcon: Icons.engineering_outlined,
+            ),
+            _ServiceList(
+              services: completed,
+              emptyMessage: 'Aun no has completado servicios',
+              emptySubMessage:
+                  'Tu historial de servicios completados aparecera aqui',
+              emptyIcon: Icons.check_circle_outline,
+            ),
+          ],
         );
       },
     );
@@ -500,9 +500,7 @@ class _HeaderStatChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
-        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

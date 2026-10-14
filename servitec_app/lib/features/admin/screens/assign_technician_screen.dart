@@ -538,8 +538,10 @@ class _TechnicianCard extends StatelessWidget {
                     Wrap(
                       spacing: 4,
                       runSpacing: 2,
+                      // All of them: the list is filtered by the
+                      // request's category, and hiding a fourth specialty
+                      // made a matching técnico look like he did not match.
                       children: technician.especialidades!
-                          .take(3)
                           .map(
                             (e) => Container(
                               padding: const EdgeInsets.symmetric(
