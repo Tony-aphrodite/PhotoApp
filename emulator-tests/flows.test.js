@@ -539,6 +539,46 @@ test('backup run: oldest first, and never assigned twice', async () => {
   assert.equal(msgs.size, 1, 'one assignment, one notification');
 });
 
+// ---------------------------------------------------------------------------
+// Accounts deleted in the Firebase console (Auth user gone, profile and
+// phone claim left behind)
+// ---------------------------------------------------------------------------
+
+test('a number held by a deleted account is released when someone registers with it', async () => {
+  await makeUser('ghost', { rol: 'cliente', telefono: '5599990001' });
+  await db.doc('telefonos/5599990001').set({ uid: 'ghost', createdAt: Timestamp.now() });
+  await admin.auth().deleteUser('ghost'); // what the console does
+  // A live owner's number must stay taken.
+  await db.doc('telefonos/5511111111').set({ uid: 'cli', createdAt: Timestamp.now() });
+
+  await makeUser('newbie', { rol: 'cliente' }, { verified: false });
+  assert.deepEqual(await call('newbie', 'liberarTelefonoHuerfano', { telefono: '5511111111' }),
+    { liberado: false }, 'the number of an existing account is never released');
+  assert.ok((await db.doc('telefonos/5511111111').get()).exists);
+
+  assert.deepEqual(await call('newbie', 'liberarTelefonoHuerfano', { telefono: '5599990001' }),
+    { liberado: true });
+  assert.equal((await db.doc('telefonos/5599990001').get()).exists, false, 'claim released');
+  assert.equal((await db.doc('users/ghost').get()).exists, false, 'orphan profile removed');
+});
+
+test('daily sweep: orphans are released; one with services is kept but switched off', async () => {
+  assignmentModule(); // loads the functions' env file first
+  const { releaseOrphanedAccounts } = require('../functions/lib/account-hygiene');
+  await makeUser('ghost2', { rol: 'tecnico', disponible: true, especialidades: ['pintura'], telefono: '5599990002' });
+  await db.doc('telefonos/5599990002').set({ uid: 'ghost2', createdAt: Timestamp.now() });
+  await db.doc('servicios/ghost2-job').set({ clienteId: 'cli', tecnicoId: 'ghost2', estado: 'pagado', categoria: 'pintura', createdAt: Timestamp.now() });
+  await admin.auth().deleteUser('ghost2');
+
+  const r = await releaseOrphanedAccounts();
+  assert.ok(r.huerfanos >= 1);
+  assert.equal((await db.doc('telefonos/5599990002').get()).exists, false);
+  const profile = (await db.doc('users/ghost2').get()).data();
+  assert.equal(profile.activo, false, 'kept for the history, but off');
+  assert.equal(profile.cuentaEliminada, true);
+  assert.ok((await db.doc('telefonos/5511111111').get()).exists, 'live accounts untouched');
+});
+
 test('unverified accounts are refused', async () => {
   await rejects(call('nover', 'visitAction', { servicioId: 'std3', accion: 'cancelar' }), /Verifica tu correo/);
 });

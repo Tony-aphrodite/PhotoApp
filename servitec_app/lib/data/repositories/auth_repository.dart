@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/user_model.dart';
 import '../models/facturapi_ref.dart';
@@ -21,12 +22,15 @@ class InvalidPhoneException implements Exception {
 class AuthRepository {
   final FirebaseAuth _auth;
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions? _functions;
 
   AuthRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
   })  : _auth = auth ?? FirebaseAuth.instance,
-        _firestore = firestore ?? FirebaseFirestore.instance;
+        _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions = functions;
 
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
@@ -166,18 +170,30 @@ class AuthRepository {
     if (user == null) throw Exception('Registration failed');
 
     final userModel = buildProfile(user.uid, phone, DateTime.now());
-    final batch = _firestore.batch()
-      ..set(
-        _firestore.collection(AppConstants.usersCollection).doc(user.uid),
-        userModel.toFirestore(),
-      )
-      ..set(
-        _firestore.collection(AppConstants.phoneClaimsCollection).doc(phone),
-        {'uid': user.uid, 'createdAt': FieldValue.serverTimestamp()},
-      );
+    Future<void> commit() => (_firestore.batch()
+          ..set(
+            _firestore.collection(AppConstants.usersCollection).doc(user.uid),
+            userModel.toFirestore(),
+          )
+          ..set(
+            _firestore.collection(AppConstants.phoneClaimsCollection).doc(phone),
+            {'uid': user.uid, 'createdAt': FieldValue.serverTimestamp()},
+          ))
+        .commit();
 
     try {
-      await batch.commit();
+      try {
+        await commit();
+      } on FirebaseException catch (e) {
+        // The number is taken. If the account that held it was deleted (in
+        // the Firebase console, say), the server releases it and this
+        // registration goes through on a second try; a number whose owner
+        // still exists stays taken and the error below stands.
+        if (e.code != 'permission-denied' || !await _releaseOrphanPhone(phone)) {
+          rethrow;
+        }
+        await commit();
+      }
     } catch (e) {
       try {
         await user.delete();
@@ -195,6 +211,18 @@ class AuthRepository {
       rethrow;
     }
     return userModel;
+  }
+
+  /// Asks the server to release [phone] if its owner no longer exists.
+  Future<bool> _releaseOrphanPhone(String phone) async {
+    try {
+      final result = await (_functions ?? FirebaseFunctions.instance)
+          .httpsCallable('liberarTelefonoHuerfano')
+          .call<Map<String, dynamic>>({'telefono': phone});
+      return result.data['liberado'] == true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Whether the signed-in account still has to confirm its email.

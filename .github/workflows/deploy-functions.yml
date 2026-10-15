@@ -74,7 +74,7 @@ jobs:
         onPaymentSucceededStripeWebhook sendAdminBroadcast
         adminGetAccountStatus adminReleasePhone submitQuotation
         respondQuotation serviceWorkAction stopWork respondStop
-        adminResolveDispute visitAction
+        adminResolveDispute visitAction liberarTelefonoHuerfano
 
     steps:
       - name: Guard production deploys
