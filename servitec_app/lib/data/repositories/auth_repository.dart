@@ -229,6 +229,20 @@ class AuthRepository {
     final fresh = _auth.currentUser;
     if (fresh == null || !fresh.emailVerified) return false;
     await fresh.getIdToken(true);
+    // Verification happens on the Auth user, which Firestore triggers cannot
+    // see. This stamp is how the server learns of it: for a técnico it
+    // assigns requests that were waiting for someone of his specialty
+    // (onTechnicianProfileChanged), and the server re-checks the Auth user
+    // itself, so the stamp proves nothing on its own.
+    try {
+      await _firestore
+          .collection(AppConstants.usersCollection)
+          .doc(fresh.uid)
+          .set({'correoVerificadoAt': FieldValue.serverTimestamp()},
+              SetOptions(merge: true));
+    } catch (_) {
+      // Not worth failing the sign-in over; the hourly backup still assigns.
+    }
     return true;
   }
 

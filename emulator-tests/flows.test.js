@@ -460,6 +460,85 @@ test('technician can switch a standard job to diagnostic', async () => {
   assert.equal((await svc('dx9')).flujo, 'estandar');
 });
 
+// ---------------------------------------------------------------------------
+// Automatic assignment of requests that were waiting for a técnico
+// ---------------------------------------------------------------------------
+
+/** A request nobody can take yet: waits until onServiceCreated records it. */
+async function waitingService(id, categoria, createdAt = Timestamp.now()) {
+  await db.doc(`servicios/${id}`).set({
+    clienteId: 'cli', clienteNombre: 'Cliente Test', clienteTelefono: '',
+    titulo: `Prueba ${id}`, descripcion: 'x', categoria, urgencia: 'normal',
+    ubicacion: new admin.firestore.GeoPoint(19.43, -99.13), ubicacionTexto: 'CDMX',
+    fotos: [], estado: 'pendiente', tipoAsignacion: 'automatica',
+    createdAt, updatedAt: createdAt,
+  });
+  return waitFor(async () => {
+    const s = await svc(id);
+    return s.flujo ? s : null;
+  }, `flow of ${id}`);
+}
+
+let assignment;
+function assignmentModule() {
+  if (!assignment) {
+    for (const line of require('fs').readFileSync(`${__dirname}/../functions/.env.demo-servitec`, 'utf8').split('\n')) {
+      const m = /^([A-Z_]+)=(.*)$/.exec(line);
+      if (m) process.env[m[1]] = m[2];
+    }
+    assignment = require('../functions/lib/lib/assignment');
+  }
+  return assignment;
+}
+
+test('a waiting request is assigned as soon as a matching técnico can take it', async () => {
+  const s0 = await waitingService('pin1', 'pintura');
+  assert.equal(s0.estado, 'pendiente', 'nobody paints yet');
+  const [flag] = await flagsFor('pin1', 'no_technician_available');
+  assert.ok(flag, 'admins are told');
+
+  // A técnico without painting signs up (a new profile triggers nothing)…
+  await makeUser('pintor', {
+    rol: 'tecnico', disponible: true, especialidades: ['electricidad'],
+    calificacionPromedio: 0, serviciosCompletados: 0,
+  });
+  // …and then adds it: the request is his within seconds, no admin involved.
+  await db.doc('users/pintor').update({ especialidades: ['electricidad', 'pintura'] });
+  const s = await waitFor(async () => {
+    const cur = await svc('pin1');
+    return cur.estado === 'asignado' ? cur : null;
+  }, 'assignment of pin1');
+  assert.equal(s.tecnicoId, 'pintor');
+  const [closed] = (await flagsFor('pin1', 'no_technician_available'));
+  assert.equal(closed.estado, 'revisada', 'the admin alert closes itself');
+});
+
+test('backup run: oldest first, and never assigned twice', async () => {
+  const { assignPendingRequests } = assignmentModule();
+  await waitingService('cer-new', 'cerrajeria', Timestamp.fromMillis(Date.now() - 60e3));
+  await waitingService('cer-old', 'cerrajeria', Timestamp.fromMillis(Date.now() - 3600e3));
+  await makeUser('cerrajero', {
+    rol: 'tecnico', disponible: true, especialidades: ['cerrajeria'],
+    calificacionPromedio: 0, serviciosCompletados: 0,
+  });
+
+  const first = await assignPendingRequests({ categorias: ['cerrajeria'], limit: 1 });
+  assert.equal(first.asignadas, 1);
+  assert.equal((await svc('cer-old')).estado, 'asignado', 'the older request goes first');
+  assert.equal((await svc('cer-new')).estado, 'pendiente');
+
+  // The hourly backup and a técnico trigger landing at the same time.
+  await Promise.all([
+    assignPendingRequests({ categorias: ['cerrajeria'] }),
+    assignPendingRequests({ categorias: ['cerrajeria'] }),
+    assignPendingRequests({}),
+  ]);
+  assert.equal((await svc('cer-new')).tecnicoId, 'cerrajero');
+  const msgs = await db.collection('servicios/cer-new/mensajes')
+    .where('metadata.event', '==', 'technician_assigned').get();
+  assert.equal(msgs.size, 1, 'one assignment, one notification');
+});
+
 test('unverified accounts are refused', async () => {
   await rejects(call('nover', 'visitAction', { servicioId: 'std3', accion: 'cancelar' }), /Verifica tu correo/);
 });

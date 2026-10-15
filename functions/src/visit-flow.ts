@@ -30,6 +30,7 @@ import {
 } from './lib/flow-helpers';
 import { ESTADO, FlowError, fmtMxn } from './lib/service-flow-rules';
 import { cfdiSafely, emitCreditNote, stampVisitCfdi } from './lib/cfdi';
+import { assignPendingRequests } from './lib/assignment';
 import {
   FLUJO,
   PAGO,
@@ -717,7 +718,15 @@ export const serviceScheduleCron = onSchedule(
   { schedule: 'every 60 minutes', region: 'us-central1', timeoutSeconds: 300 },
   async () => {
     const { due, failed } = await runDueServiceTasks();
+    // Backup for automatic assignment: requests still waiting because no
+    // técnico matched when they were created, nor when one became available
+    // (see onTechnicianProfileChanged). Oldest first.
+    const pending = await assignPendingRequests({ limit: 50 }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('pending assignment failed', err);
+      return { revisadas: 0, asignadas: 0 };
+    });
     // eslint-disable-next-line no-console
-    console.log(`Schedule: ${due} due, ${failed} failed.`);
+    console.log(`Schedule: ${due} due, ${failed} failed; ${pending.asignadas}/${pending.revisadas} waiting requests assigned.`);
   },
 );
